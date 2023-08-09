@@ -125,7 +125,7 @@ class LobbyView(discord.ui.View):
             return
         
         if interaction.user.id in self.lobby.players or interaction.user.id in self.lobby.fillers:
-            await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
+            await interaction.response.send_message(content="You aren't in this lobby! 😡", ephemeral=True)
             return
 
         playerList = self.lobby.players[:self.lobby.maxPlayers]
@@ -140,6 +140,8 @@ class LobbyView(discord.ui.View):
             message.append(". Your game is ready!")
             await close_lobby(self.lobby.owner, interaction, False)
             await interaction.response.send_message(content=''.join(message))
+        else: 
+            await interaction.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
         
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
