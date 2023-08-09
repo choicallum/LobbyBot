@@ -20,6 +20,7 @@ class Lobby:
         self.completed = False
         self.view = None
         self.message = None
+        self.channel = None
         self.players = []
         self.fillers = []
         self.players.append(owner)
@@ -40,12 +41,18 @@ class Lobby:
         """ completes the interaction by sending a new message of the embed """
         new_embed = self.create_embed()
         if self.message:
-            await self.message.delete()
+            oldmsg = await self.channel.fetch_message(self.message)
+            await oldmsg.delete()
+
             await interaction.response.send_message(embed=new_embed, view=self.view)
-            self.message = await interaction.original_response()
+            interMsg = await interaction.original_response() # expires in 15 minutes
+            self.message = interMsg.id
+            self.channel = interaction.channel
         else:
             await interaction.response.send_message(embed=new_embed, view=self.view)
-            self.message = await interaction.original_response()
+            interMsg = await interaction.original_response() # expires in 15 minutes
+            self.message = interMsg.id
+            self.channel = interaction.channel
 
     async def is_lobby_done(self, interaction: discord.Interaction) -> bool:
         if self.completed:
@@ -168,6 +175,7 @@ def run():
             logger.info(f"Guild: {guild}")
 
         await bot.tree.sync()
+        logger.info("synced!")
 
     @bot.hybrid_command()
     async def ping(ctx):
@@ -198,9 +206,9 @@ def run():
         """
         Starts a new lobby
         
-        :param time: eg. 4:20PM or "now". What time you want the lobby to start.
+        :param time: eg. 4PM, 4:20PM or now. What time you want the lobby to start.
         :param lobby_size: Max number of players in the lobby.
-        :param game: The game being played!
+        :param game: The game being played.
         """
 
         if lobby_size < 0:
@@ -220,8 +228,11 @@ def run():
                 start_time = datetime.now() + dt.timedelta(minutes=5)
                 utc_time = int(start_time.timestamp())
             else:
+                if ':' in time:
+                    input_time = datetime.strptime(time, "%I:%M%p")
+                else:
+                    input_time = datetime.strptime(time, "%I%p")
                 today = date.today()
-                input_time = datetime.strptime(time, "%I:%M%p")
                 start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
                 localized_time = pytz.timezone(timezone).localize(start_time)
                 utc_time = int(localized_time.timestamp())
@@ -235,7 +246,7 @@ def run():
             timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 3600
      
         except ValueError:
-            await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]` format or `now`.", ephemeral=True)
+            await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `now`.", ephemeral=True)
             return
         
         if owner in Lobbies:
@@ -248,9 +259,7 @@ def run():
         view = LobbyView(timeout=timeout, lobby=lobby)
         lobby.view = view
 
-        await interaction.response.send_message(embed=lobby.create_embed(), view=view)
-        message = await interaction.original_response()
-        lobby.message = message
+        await lobby.update_message(interaction)
     
     bot.tree.command(name="lobby", description="Starts a new lobby")(lobby)
     
