@@ -11,20 +11,22 @@ from datetime import datetime, date
 logger = settings.logging.getLogger("bot")
 
 class Lobby:
-    def __init__(self, owner: int, time: int, maxPlayers: int, interaction: discord.Interaction):
+    def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
         self.owner = owner
-        self.players = []
-        self.fillers = []
         self.time = time
         self.maxPlayers = maxPlayers
-        self.interaction: discord.Interaction = interaction
-        self.message = None
+        self.game = game
 
+        self.completed = False
+        self.view = None
+        self.message = None
+        self.players = []
+        self.fillers = []
         self.players.append(owner)
 
     def create_embed(self) -> discord.Embed:
         embed = discord.Embed(
-                              description= f"This is a Valorant Lobby aiming to start at <t:{self.time}:t>", 
+                              description= f"This is a {self.game} lobby aiming to start at <t:{self.time}:t>", 
                               color=discord.Color.blurple())
         embed.add_field(name="Players", value = "\n".join([f"<@{player}>" for player in self.players]), inline=True)
         embed.add_field(name="Fillers", value = "\n".join([f"<@{filler}>" for filler in self.fillers]), inline=True)
@@ -34,18 +36,38 @@ class Lobby:
     def in_lobby(self, user_id: int) -> bool:
         return user_id in self.players or user_id in self.fillers
     
-    async def update_message(self):
+    async def update_message(self, interaction: discord.Interaction):
+        """ completes the interaction by sending a new message of the embed """
+        new_embed = self.create_embed()
         if self.message:
-            new_embed = self.create_embed()
-            await self.message.edit(embed=new_embed)
+            await self.message.delete()
+            await interaction.response.send_message(embed=new_embed, view=self.view)
+            self.message = await interaction.original_response()
+        else:
+            await interaction.response.send_message(embed=new_embed, view=self.view)
+            self.message = await interaction.original_response()
+
+    async def is_lobby_done(self, interaction: discord.Interaction) -> bool:
+        if self.completed:
+            await interaction.response.send_message("This lobby is already completed! 😿", ephemeral=True)
+        
+        return self.completed
     
 Lobbies = {}
-async def close_lobby(user_id: int, interaction: discord.Interaction):
+async def close_lobby(user_id: int, interaction: discord.Interaction, sendMessage: bool):
+    message = ""
+    ephemeral = True
     if user_id not in Lobbies:
-        await interaction.response.send_message(content="You did not have an active lobby.", ephemeral=True)
+        message = "You did not have an active lobby."
+        ephemeral = True
     else:
+        message = "Lobby successfully closed."
+        ephemeral = False
+        Lobbies[user_id].completed = True
         del Lobbies[user_id]
-        await interaction.response.send_message(content="Lobby successfully closed.", ephemeral=False)
+
+    if sendMessage:
+        await interaction.response.send_message(content=message, ephemeral=ephemeral)
 
 class LobbyView(discord.ui.View):
     def __init__(self, timeout: int, lobby: Lobby):
@@ -54,29 +76,39 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary, custom_id="play_button")
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.lobby.in_lobby(interaction.user.id):
-            await interaction.response.send_message(content="You're already in this lobby! 😡", ephemeral=True)
+        if await self.lobby.is_lobby_done(interaction):
             return
-
+        
+        user = interaction.user.id
+        if user in self.lobby.players:
+            await interaction.response.send_message(content="You're already playing in this lobby! 😡", ephemeral=True)
+            return
         if len(self.lobby.players) < self.lobby.maxPlayers:
-            self.lobby.players.append(interaction.user.id)
-            await interaction.response.send_message(content="You are now a gamer 🥺", ephemeral=True)
+            if user in self.lobby.fillers: 
+                self.lobby.fillers.remove(user)
+            self.lobby.players.append(user)
+            await self.lobby.update_message(interaction)
         else:
             await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
-        await self.lobby.update_message()
     
     @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary, custom_id="fill_button")
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if self.lobby.in_lobby(interaction.user.id):
-            await interaction.response.send_message(content="You're already in this lobby! 😡", ephemeral=True)
+        if await self.lobby.is_lobby_done(interaction):
             return
-
-        self.lobby.fillers.append(interaction.user.id)
-        await interaction.response.send_message(content="You are now a filler 🥺", ephemeral=True)
-        await self.lobby.update_message()
+        user = interaction.user.id
+        if user in self.lobby.fillers:
+            await interaction.response.send_message(content="You're already filling in this lobby! 😡", ephemeral=True)
+            return
+        
+        if user in self.lobby.players: 
+            self.lobby.players.remove(user)
+        self.lobby.fillers.append(user)
+        await self.lobby.update_message(interaction)
 
     @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red, custom_id="leave_button")
     async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if await self.lobby.is_lobby_done(interaction):
+            return
         user = interaction.user.id
         if user in self.lobby.players:
             self.lobby.players.remove(user)
@@ -85,24 +117,39 @@ class LobbyView(discord.ui.View):
         else:
             await interaction.response.send_message(content="You weren't in this lobby! 😡", ephemeral=True)
             return
-        await interaction.response.send_message(content="You were successfully removed from the lobby!", ephemeral=True)
-        await self.lobby.update_message()
+        await self.lobby.update_message(interaction)
     
-    #@discord.ui.button(label="Start lobby [does not work yet]", style=discord.ButtonStyle.green, custom_id="start_button")
-    #async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-    #    if interaction.user.id != self.lobby.owner:
-    #        await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
-    #        return
+    @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green, custom_id="start_button")
+    async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if await self.lobby.is_lobby_done(interaction):
+            return
+        
+        if interaction.user.id in self.lobby.players or interaction.user.id in self.lobby.fillers:
+            await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
+            return
+
+        playerList = self.lobby.players[:self.lobby.maxPlayers]
+        needed_players = self.lobby.maxPlayers - len(self.lobby.players)
+        if needed_players > 0:
+            playerList.extend(self.lobby.fillers[:needed_players])
+        
+        if len(playerList) == self.lobby.maxPlayers:
+            message = []
+            for player in playerList:
+                message.append(f"<@{player}> ")
+            message.append(". Your game is ready!")
+            await close_lobby(self.lobby.owner, interaction, False)
+            await interaction.response.send_message(content=''.join(message))
         
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if await self.lobby.is_lobby_done(interaction):
+            return
+        
         if interaction.user.id != self.lobby.owner:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
             return
-        await close_lobby(self.lobby.owner, interaction)
-
-        
-        
+        await close_lobby(self.lobby.owner, interaction, True)
         
 
 def run():
@@ -114,10 +161,11 @@ def run():
     @bot.event
     async def on_ready():
         logger.info(f"User: {bot.user} (ID: {bot.user.id})")
-        logger.info(f"id: {bot.guilds[0].id}")
 
-        bot.tree.copy_global_to(guild=settings.GUILDS_ID)
-        await bot.tree.sync(guild=settings.GUILDS_ID)
+        for guild in bot.guilds:
+            logger.info(f"Guild: {guild}")
+
+        await bot.tree.sync()
 
     @bot.hybrid_command()
     async def ping(ctx):
@@ -144,15 +192,19 @@ def run():
  
         select.callback = on_select
 
-    @bot.tree.command(name="lobby", description="Starts a new lobby")
-    async def lobby(interaction: discord.Interaction, time: str, lobby_size: int = 5):
+    async def lobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
         """
         Starts a new lobby
         
         :param time: eg. 4:20PM or "now". What time you want the lobby to start.
         :param lobby_size: Max number of players in the lobby.
+        :param game: The game being played!
         """
 
+        if lobby_size < 0:
+            await interaction.response.send_message("The lobby size must be greater than 0.", ephemeral=True)
+            return
+        
         owner = interaction.user.id
         timezone = getTimeZone(owner)
         if timezone == "":
@@ -188,18 +240,25 @@ def run():
             await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
             return
         else:
-            lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, interaction=interaction)
+            lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game)
             Lobbies[owner] = lobby
 
         view = LobbyView(timeout=timeout, lobby=lobby)
+        lobby.view = view
 
         await interaction.response.send_message(embed=lobby.create_embed(), view=view)
         message = await interaction.original_response()
         lobby.message = message
     
+    bot.tree.command(name="lobby", description="Starts a new lobby")(lobby)
+    
+    @bot.tree.command(name="flexnow", description="Starts a new flex lobby")
+    async def flexnow(interaction: discord.Interaction, lobby_size: int = 5):
+        await lobby(interaction, "now", lobby_size, "flex")
+
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
-        await close_lobby(interaction.user.id, interaction)
+        await close_lobby(interaction.user.id, interaction, True)
     
     bot.run(settings.DISCORD_API_SECRET, root_logger=True)
 
