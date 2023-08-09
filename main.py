@@ -61,16 +61,19 @@ class Lobby:
         return self.completed
     
 Lobbies = {}
-async def close_lobby(user_id: int, interaction: discord.Interaction, sendMessage: bool):
+async def close_lobby(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
     message = ""
     ephemeral = True
     if user_id not in Lobbies:
-        message = "You did not have an active lobby."
+        message = "You did not have an active lobby. 😒"
         ephemeral = True
     else:
-        message = "Lobby successfully closed."
+        message = "Lobby successfully closed. 🔒"
         ephemeral = False
         Lobbies[user_id].completed = True
+        if delete:
+            oldmsg = await Lobbies[user_id].channel.fetch_message(Lobbies[user_id].message)
+            await oldmsg.delete()
         del Lobbies[user_id]
 
     if sendMessage:
@@ -132,23 +135,22 @@ class LobbyView(discord.ui.View):
             return
         
         if interaction.user.id in self.lobby.players or interaction.user.id in self.lobby.fillers:
+            playerList = self.lobby.players[:self.lobby.maxPlayers]
+            needed_players = self.lobby.maxPlayers - len(self.lobby.players)
+            if needed_players > 0:
+                playerList.extend(self.lobby.fillers[:needed_players])
+        
+            if len(playerList) == self.lobby.maxPlayers:
+                message = ["Your game is ready!\n"]
+                for player in playerList:
+                    message.append(f"<@{player}>")
+                await close_lobby(self.lobby.owner, interaction, False, False)
+                await interaction.response.send_message(content=''.join(message))
+            else: 
+                await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
+        else:
             await interaction.response.send_message(content="You aren't in this lobby! 😡", ephemeral=True)
             return
-
-        playerList = self.lobby.players[:self.lobby.maxPlayers]
-        needed_players = self.lobby.maxPlayers - len(self.lobby.players)
-        if needed_players > 0:
-            playerList.extend(self.lobby.fillers[:needed_players])
-        
-        if len(playerList) == self.lobby.maxPlayers:
-            message = []
-            for player in playerList:
-                message.append(f"<@{player}> ")
-            message.append(". Your game is ready!")
-            await close_lobby(self.lobby.owner, interaction, False)
-            await interaction.response.send_message(content=''.join(message))
-        else: 
-            await interaction.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
         
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -158,7 +160,7 @@ class LobbyView(discord.ui.View):
         if interaction.user.id != self.lobby.owner:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
             return
-        await close_lobby(self.lobby.owner, interaction, True)
+        await close_lobby(self.lobby.owner, interaction, True, True)
         
 
 def run():
@@ -269,7 +271,7 @@ def run():
 
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
-        await close_lobby(interaction.user.id, interaction, True)
+        await close_lobby(interaction.user.id, interaction, True, True)
     
     bot.run(settings.DISCORD_API_SECRET, root_logger=True)
 
