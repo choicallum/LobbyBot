@@ -1,14 +1,11 @@
-import settings
 import discord
 import pytz 
 import datetime as dt
-
-from pathlib import Path
-from discord.ext import commands
-from discord.ui import Select
 from datetime import datetime, date
 
-logger = settings.logging.getLogger("bot")
+from timezone import getTimeZone
+
+Lobbies = {}
 
 class Lobby:
     def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
@@ -60,8 +57,7 @@ class Lobby:
         
         return self.completed
     
-Lobbies = {}
-async def close_lobby(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
+async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
     message = ""
     ephemeral = True
     if user_id not in Lobbies:
@@ -144,7 +140,7 @@ class LobbyView(discord.ui.View):
                 message = ["Your game is ready!\n"]
                 for player in playerList:
                     message.append(f"<@{player}>")
-                await close_lobby(self.lobby.owner, interaction, False, False)
+                await close_lobby_by_uid(self.lobby.owner, interaction, False, False)
                 await interaction.response.send_message(content=''.join(message))
             else: 
                 await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
@@ -160,139 +156,63 @@ class LobbyView(discord.ui.View):
         if interaction.user.id != self.lobby.owner:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
             return
-        await close_lobby(self.lobby.owner, interaction, True, True)
+        await close_lobby_by_uid(self.lobby.owner, interaction, True, True)
+
+async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
+    """
+    Starts a new lobby
         
+    :param time: eg. 4PM, 4:20PM or now. What time you want the lobby to start.
+    :param lobby_size: Max number of players in the lobby.
+    :param game: The game being played.
+    """
 
-def run():
-    intents = discord.Intents.default()
-    intents.message_content = True
-
-    bot = commands.Bot(command_prefix="!", intents=intents)
-
-    @bot.event
-    async def on_ready():
-        logger.info(f"User: {bot.user} (ID: {bot.user.id})")
-
-        for guild in bot.guilds:
-            logger.info(f"Guild: {guild}")
-
-        await bot.tree.sync()
-        logger.info("synced!")
-
-    @bot.hybrid_command()
-    async def ping(ctx):
-        """ Answers with Pong """
-        await ctx.send("pong")
-    
-    @bot.tree.command(name="set", description="Set your time zone")
-    async def set(interaction: discord.Interaction):
-        select = Select(
-            placeholder="Please set your time zone.",
-            options=[
-                discord.SelectOption(label="PST", emoji="🤢"),
-                discord.SelectOption(label="MST", emoji="🏔"),
-                discord.SelectOption(label="CST", emoji="🐛"),
-                discord.SelectOption(label="EST", emoji="😍")
-            ]
-        )
-        timezoneView = discord.ui.View(timeout=60)
-        timezoneView.add_item(select)
-        await interaction.response.send_message(view=timezoneView, ephemeral=True)
-        async def on_select(interaction: discord.Interaction):
-            setTimeZone(interaction.user.id, select.values[0])
-            await interaction.response.send_message(content="Your timezone has been set successfully.", ephemeral=True)
- 
-        select.callback = on_select
-
-    async def lobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
-        """
-        Starts a new lobby
+    if lobby_size < 0:
+        await interaction.response.send_message("The lobby size must be greater than 0.", ephemeral=True)
+        return
         
-        :param time: eg. 4PM, 4:20PM or now. What time you want the lobby to start.
-        :param lobby_size: Max number of players in the lobby.
-        :param game: The game being played.
-        """
-
-        if lobby_size < 0:
-            await interaction.response.send_message("The lobby size must be greater than 0.", ephemeral=True)
-            return
-        
-        owner = interaction.user.id
-        timezone = getTimeZone(owner)
-        if timezone == "":
-            await interaction.response.send_message("Your timezone has not been set yet. Please use /set to set your timezone.", ephemeral=True)
-            return
+    owner = interaction.user.id
+    timezone = getTimeZone(owner)
+    if timezone == "":
+        await interaction.response.send_message("Your timezone has not been set yet. Please use /set to set your timezone.", ephemeral=True)
+        return
 
             
-        #Try to parse the time input.
-        try:
-            if time.lower() == "now":
-                start_time = datetime.now() + dt.timedelta(minutes=5)
-                utc_time = int(start_time.timestamp())
-            else:
-                if ':' in time:
-                    input_time = datetime.strptime(time, "%I:%M%p")
-                else:
-                    input_time = datetime.strptime(time, "%I%p")
-                today = date.today()
-                start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
-                localized_time = pytz.timezone(timezone).localize(start_time)
-                utc_time = int(localized_time.timestamp())
-    
-            timeUntilLobby = int(start_time.timestamp()) - int(datetime.now().timestamp())
-            # if the user meant tomorrow (i.e. 1am tmrw when it's 11pm today, then move it by a day)
-            if timeUntilLobby < 0:
-                utc_time = utc_time + 86400 #86400 is 1 day in seconds.
-                start_time += dt.timedelta(days=1)
-
-            timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 3600
-     
-        except ValueError:
-            await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `now`.", ephemeral=True)
-            return
-        
-        if owner in Lobbies:
-            await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
-            return
+    #Try to parse the time input.
+    try:
+        if time.lower() == "now":
+            start_time = datetime.now() + dt.timedelta(minutes=5)
+            utc_time = int(start_time.timestamp())
         else:
-            lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game)
-            Lobbies[owner] = lobby
+            if ':' in time:
+                input_time = datetime.strptime(time, "%I:%M%p")
+            else:
+                input_time = datetime.strptime(time, "%I%p")
+            today = date.today()
+            start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
+            localized_time = pytz.timezone(timezone).localize(start_time)
+            utc_time = int(localized_time.timestamp())
 
-        view = LobbyView(timeout=timeout, lobby=lobby)
-        lobby.view = view
+        timeUntilLobby = int(start_time.timestamp()) - int(datetime.now().timestamp())
+        # if the user meant tomorrow (i.e. 1am tmrw when it's 11pm today, then move it by a day)
+        if timeUntilLobby < 0:
+            utc_time = utc_time + 86400 #86400 is 1 day in seconds.
+            start_time += dt.timedelta(days=1)
 
-        await lobby.update_message(interaction)
+        timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 43200 # 12 hours
     
-    bot.tree.command(name="lobby", description="Starts a new lobby")(lobby)
+    except ValueError:
+        await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `now`.", ephemeral=True)
+        return
     
-    @bot.tree.command(name="flexnow", description="Starts a new flex lobby")
-    async def flexnow(interaction: discord.Interaction, lobby_size: int = 5):
-        await lobby(interaction, "now", lobby_size, "flex")
+    if owner in Lobbies:
+        await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
+        return
+    else:
+        lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game)
+        Lobbies[owner] = lobby
 
-    @bot.tree.command(name="close", description="Closes an existing lobby")
-    async def close(interaction: discord.Interaction):
-        await close_lobby(interaction.user.id, interaction, True, True)
-    
-    bot.run(settings.DISCORD_API_SECRET, root_logger=True)
+    view = LobbyView(timeout=timeout, lobby=lobby)
+    lobby.view = view
 
-def getTimeZone(userId: str) -> str:
-    user_file = Path(f'users/{userId}.txt')
-    if not user_file.exists():
-        return ''    
-    with user_file.open() as f:
-        return f.read()
-
-def setTimeZone(userId: str, timezone: str):
-    verboseTimeZone = {
-        "PST": "US/Pacific",
-        "MST": "US/Mountain",
-        "CST": "US/Central",
-        "EST": "US/Eastern"
-    }[timezone]
-
-    user_file = Path(f'users/{userId}.txt')
-    with user_file.open("w") as f:
-        f.write(verboseTimeZone)
-    
-if __name__ == "__main__":
-    run()
+    await lobby.update_message(interaction)

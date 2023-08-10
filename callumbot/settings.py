@@ -1,8 +1,7 @@
 import os
-import logging.config
 from logging.config import dictConfig
 from dotenv import load_dotenv
-import discord
+import logging
 
 load_dotenv()
 DISCORD_API_SECRET = os.getenv("DISCORD_API_TOKEN")
@@ -30,7 +29,7 @@ LOGGING_CONFIG = {
         "file": {
             "level": "INFO",
             "class": "logging.FileHandler",
-            "filename": "logs/infos.log",
+            "filename": "../logs/infos.log",
             "mode": "w",
             "formatter": "verbose",
         },
