@@ -1,7 +1,7 @@
 from pathlib import Path
-
+from settings import USERS_PATH
 def getTimeZone(userId: str) -> str:
-    user_file = Path(f'users/{userId}.txt')
+    user_file = Path(f'{USERS_PATH}/{userId}.txt')
     if not user_file.exists():
         return ''    
     with user_file.open() as f:
@@ -15,6 +15,6 @@ def setTimeZone(userId: str, timezone: str):
         "EST": "US/Eastern"
     }[timezone]
 
-    user_file = Path(f'users/{userId}.txt')
+    user_file = Path(f'{USERS_PATH}/{userId}.txt')
     with user_file.open("w") as f:
         f.write(verboseTimeZone)
