@@ -2,12 +2,15 @@
 import settings
 import discord
 from discord.ext import commands
+import logging 
 
 # src imports
 from lobby import close_lobby_by_uid, makeLobby
 from timezone import setTimeZone
 
-logger = settings.logging.getLogger("bot")  
+logger = logging.getLogger('discord')
+logging.basicConfig(level=logging.NOTSET)
+
 def run():
     intents = discord.Intents.default()
     intents.message_content = True
@@ -23,6 +26,7 @@ def run():
 
         await bot.tree.sync()
         logger.info("synced!")
+        logger.info("CallumBot is online!")
 
     @bot.hybrid_command()
     async def ping(ctx):
