@@ -1,15 +1,18 @@
 # library imports
-import settings
 import discord
+import logging
+
 from discord.ext import commands
-import logging 
 
 # src imports
-from lobby import close_lobby_by_uid, makeLobby
+from lobby import close_lobby_by_uid, makeLobby, show_all_lobbies
 from timezone import setTimeZone
+from settings import DISCORD_API_SECRET
 
-logger = logging.getLogger('discord')
-logging.basicConfig(level=logging.NOTSET)
+logger = logging.getLogger(__name__)
+
+def log_cmd_start(interaction: discord.Interaction, name: str):
+    logger.info(f"{interaction.user.name}({interaction.user.id}) started {name} command")
 
 def run():
     intents = discord.Intents.default()
@@ -28,42 +31,45 @@ def run():
         logger.info("synced!")
         logger.info("CallumBot is online!")
 
-    @bot.hybrid_command()
-    async def ping(ctx):
-        """ Answers with Pong """
-        await ctx.send("pong")
+    @bot.tree.command(name="ping", description="Pong!")
+    async def ping(interaction: discord.Interaction):
+        log_cmd_start(interaction, "ping")
+        await interaction.response.send_message("Pong!")
     
     @bot.tree.command(name="set", description="Set your time zone")
     async def set(interaction: discord.Interaction):
-        select = discord.ui.Select(
-            placeholder="Please set your time zone.",
-            options=[
-                discord.SelectOption(label="PST", emoji="🤢"),
-                discord.SelectOption(label="MST", emoji="🏔"),
-                discord.SelectOption(label="CST", emoji="🐛"),
-                discord.SelectOption(label="EST", emoji="😍")
-            ]
-        )
-        timezoneView = discord.ui.View(timeout=60)
-        timezoneView.add_item(select)
-        await interaction.response.send_message(view=timezoneView, ephemeral=True)
-        async def on_select(interaction: discord.Interaction):
-            setTimeZone(interaction.user.id, select.values[0])
-            await interaction.response.send_message(content="Your timezone has been set successfully.", ephemeral=True)
- 
-        select.callback = on_select
-    
-    bot.tree.command(name="lobby", description="Starts a new lobby")(makeLobby)
+        log_cmd_start(interaction, "set")
+        await setTimeZone(interaction)
+
+    @bot.tree.command(name="lobby", description="Starts a new lobby")
+    async def lobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
+        """
+        :param time: eg. 4PM, 4:20PM or now. What time you want the lobby to start.
+        :param lobby_size: Max number of players in the lobby.
+        :param game: The game being played.
+        """
+        log_cmd_start(interaction, "lobby")
+        await makeLobby(interaction, time, lobby_size, game)
     
     @bot.tree.command(name="flexnow", description="Starts a new flex lobby")
     async def flexnow(interaction: discord.Interaction, lobby_size: int = 5):
+        """
+        :param lobby_size: Max number of players in the lobby.
+        """
+        log_cmd_start(interaction, "flexnow")
         await makeLobby(interaction, "now", lobby_size, "flex")
 
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
-        await close_lobby_by_uid(interaction.user.id, interaction, True, True)
-
-    bot.run(settings.DISCORD_API_SECRET, root_logger=True)
+        log_cmd_start(interaction, "close")
+        await close_lobby_by_uid(interaction.user.id, interaction, True, True)\
+    
+    @bot.tree.command(name="showall", description="shows all active lobbies")
+    async def showall(interaction: discord.Interaction):
+        log_cmd_start(interaction, "showall")
+        await show_all_lobbies(interaction)
+    
+    bot.run(DISCORD_API_SECRET, root_logger=True)
     
 if __name__ == "__main__":
     run()

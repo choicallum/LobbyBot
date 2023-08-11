@@ -1,11 +1,15 @@
 import discord
+import logging
 import pytz 
+
 import datetime as dt
 from datetime import datetime, date
 
 from timezone import getTimeZone
 
+logger = logging.getLogger(__name__)
 Lobbies = {}
+
 
 class Lobby:
     def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
@@ -24,8 +28,8 @@ class Lobby:
 
     def create_embed(self) -> discord.Embed:
         embed = discord.Embed(
-                              description= f"This is a {self.game} lobby aiming to start at <t:{self.time}:t>", 
-                              color=discord.Color.blurple())
+            description= f"This is a {self.game} lobby starting at <t:{self.time}:t>", 
+            color=discord.Color.blue())
         embed.add_field(name="Players", value = "\n".join([f"<@{player}>" for player in self.players]), inline=True)
         embed.add_field(name="Fillers", value = "\n".join([f"<@{filler}>" for filler in self.fillers]), inline=True)
         embed.set_footer(text=f"Max players: {self.maxPlayers}")  
@@ -57,6 +61,24 @@ class Lobby:
         
         return self.completed
     
+    def __str__(self):
+        player_list = ", ".join([f"<@{player}>" for player in self.players])
+        filler_list = ", ".join([f"<@{filler}>" for filler in self.fillers])
+        parts = [f"Owner: <@{self.owner}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time}", f"Players: {player_list}", f"Fillers: {filler_list}"]
+        return "\n".join(parts)
+
+async def show_all_lobbies(interaction: discord.Interaction):
+    if len(Lobbies) == 0:
+        await interaction.response.send_message("There are no currently active lobbies!")
+        return
+    
+    embed = discord.Embed(
+        title= f"All Active Lobbies", 
+        color=discord.Color.blue())
+    embed.add_field(name="Lobbies", value = "\n---".join([f"{lobby}" for lobby in Lobbies.values()]), inline=True)
+    await interaction.response.send_message(embed=embed)
+
+
 async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
     message = ""
     ephemeral = True
@@ -159,14 +181,6 @@ class LobbyView(discord.ui.View):
         await close_lobby_by_uid(self.lobby.owner, interaction, True, True)
 
 async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
-    """
-    Starts a new lobby
-        
-    :param time: eg. 4PM, 4:20PM or now. What time you want the lobby to start.
-    :param lobby_size: Max number of players in the lobby.
-    :param game: The game being played.
-    """
-
     if lobby_size < 0:
         await interaction.response.send_message("The lobby size must be greater than 0.", ephemeral=True)
         return
@@ -177,33 +191,32 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         await interaction.response.send_message("Your timezone has not been set yet. Please use /set to set your timezone.", ephemeral=True)
         return
 
-            
     #Try to parse the time input.
-    try:
-        if time.lower() == "now":
-            start_time = datetime.now() + dt.timedelta(minutes=5)
-            utc_time = int(start_time.timestamp())
-        else:
+    if time.lower() == "now":
+        start_time = datetime.now() + dt.timedelta(minutes=1)
+        utc_time = int(start_time.timestamp())
+    else:
+        try:
             if ':' in time:
                 input_time = datetime.strptime(time, "%I:%M%p")
             else:
                 input_time = datetime.strptime(time, "%I%p")
-            today = date.today()
-            start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
-            localized_time = pytz.timezone(timezone).localize(start_time)
-            utc_time = int(localized_time.timestamp())
+        except ValueError:
+            logger.info(f"Parsing start time failed. Input: {time}")
+            await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `now`.", ephemeral=True)
+            return
+        today = date.today()
+        start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
+        localized_time = pytz.timezone(timezone).localize(start_time)
+        utc_time = int(localized_time.timestamp())
 
-        timeUntilLobby = int(start_time.timestamp()) - int(datetime.now().timestamp())
-        # if the user meant tomorrow (i.e. 1am tmrw when it's 11pm today, then move it by a day)
-        if timeUntilLobby < 0:
-            utc_time = utc_time + 86400 #86400 is 1 day in seconds.
-            start_time += dt.timedelta(days=1)
+    timeUntilLobby = int(start_time.timestamp()) - int(datetime.now().timestamp())
+    # if the user meant tomorrow (i.e. 1am tmrw when it's 11pm today, then move it by a day)
+    if timeUntilLobby < 0:
+        utc_time = utc_time + 86400 #86400 is 1 day in seconds.
+        start_time += dt.timedelta(days=1)
 
-        timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 43200 # 12 hours
-    
-    except ValueError:
-        await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `now`.", ephemeral=True)
-        return
+    timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 43200 # 12 hours
     
     if owner in Lobbies:
         await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
@@ -213,6 +226,7 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         Lobbies[owner] = lobby
 
     view = LobbyView(timeout=timeout, lobby=lobby)
+    logger.info(f"New LobbyView was created, which will timeout in {timeout} seconds, which is at {start_time + dt.timedelta(seconds=timeout)}")
     lobby.view = view
 
     await lobby.update_message(interaction)
