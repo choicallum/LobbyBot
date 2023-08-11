@@ -6,10 +6,12 @@ import datetime as dt
 from datetime import datetime, date
 
 from timezone import getTimeZone
-from main import log_cmd_start
 logger = logging.getLogger(__name__)
+
 Lobbies = {}
 
+def log_button(interaction: discord.Interaction, name: str):
+    logger.info(f"{interaction.user.name}({interaction.user.id}) pressed {name} button")
 
 class Lobby:
     def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
@@ -104,7 +106,7 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary, custom_id="play_button")
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_cmd_start(interaction, "play button")
+        log_button(interaction, "play")
         if await self.lobby.is_lobby_done(interaction):
             return
         
@@ -122,7 +124,7 @@ class LobbyView(discord.ui.View):
     
     @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary, custom_id="fill_button")
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_cmd_start(interaction, "fill button")
+        log_button(interaction, "fill")
         if await self.lobby.is_lobby_done(interaction):
             return
         user = interaction.user.id
@@ -137,7 +139,7 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red, custom_id="leave_button")
     async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_cmd_start(interaction, "leave button")
+        log_button(interaction, "leave")
         if await self.lobby.is_lobby_done(interaction):
             return
         user = interaction.user.id
@@ -152,7 +154,7 @@ class LobbyView(discord.ui.View):
     
     @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green, custom_id="start_button")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_cmd_start(interaction, "start button")
+        log_button(interaction, "start")
         if await self.lobby.is_lobby_done(interaction):
             return
         
@@ -176,7 +178,7 @@ class LobbyView(discord.ui.View):
         
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_cmd_start(interaction, "close button")
+        log_button(interaction, "close")
         if await self.lobby.is_lobby_done(interaction):
             return
         
