@@ -12,7 +12,9 @@ def setTimeZone(userId: str, timezone: str):
         "PST": "US/Pacific",
         "MST": "US/Mountain",
         "CST": "US/Central",
-        "EST": "US/Eastern"
+        "EST": "US/Eastern",
+        "Troll": "Antarctica/Troll",
+        "Goose": "America/Goose_Bay"
     }[timezone]
 
     user_file = Path(f'{USERS_PATH}/{userId}.txt')
