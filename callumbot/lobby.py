@@ -6,7 +6,7 @@ import datetime as dt
 from datetime import datetime, date
 
 from timezone import getTimeZone
-
+from main import log_cmd_start
 logger = logging.getLogger(__name__)
 Lobbies = {}
 
@@ -104,6 +104,7 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary, custom_id="play_button")
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        log_cmd_start(interaction, "play button")
         if await self.lobby.is_lobby_done(interaction):
             return
         
@@ -121,6 +122,7 @@ class LobbyView(discord.ui.View):
     
     @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary, custom_id="fill_button")
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        log_cmd_start(interaction, "fill button")
         if await self.lobby.is_lobby_done(interaction):
             return
         user = interaction.user.id
@@ -135,6 +137,7 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red, custom_id="leave_button")
     async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        log_cmd_start(interaction, "leave button")
         if await self.lobby.is_lobby_done(interaction):
             return
         user = interaction.user.id
@@ -149,29 +152,31 @@ class LobbyView(discord.ui.View):
     
     @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green, custom_id="start_button")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        log_cmd_start(interaction, "start button")
         if await self.lobby.is_lobby_done(interaction):
             return
         
-        if interaction.user.id in self.lobby.players or interaction.user.id in self.lobby.fillers:
-            playerList = self.lobby.players[:self.lobby.maxPlayers]
-            needed_players = self.lobby.maxPlayers - len(self.lobby.players)
-            if needed_players > 0:
-                playerList.extend(self.lobby.fillers[:needed_players])
-        
-            if len(playerList) == self.lobby.maxPlayers:
-                message = ["Your game is ready!\n"]
-                for player in playerList:
-                    message.append(f"<@{player}>")
-                await close_lobby_by_uid(self.lobby.owner, interaction, False, False)
-                await interaction.response.send_message(content=''.join(message))
-            else: 
-                await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
-        else:
+        if interaction.user.id not in self.lobby.players and interaction.user.id not in self.lobby.fillers:
             await interaction.response.send_message(content="You aren't in this lobby! 😡", ephemeral=True)
             return
         
+        playerList = self.lobby.players[:self.lobby.maxPlayers]
+        needed_players = self.lobby.maxPlayers - len(self.lobby.players)
+        if needed_players > 0:
+            playerList.extend(self.lobby.fillers[:needed_players])
+        
+        if len(playerList) == self.lobby.maxPlayers:
+            message = ["Your game is ready!\n"]
+            for player in playerList:
+                message.append(f"<@{player}>")
+            await close_lobby_by_uid(self.lobby.owner, interaction, False, False)
+            await interaction.response.send_message(content=''.join(message))
+        else: 
+            await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
+        
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        log_cmd_start(interaction, "close button")
         if await self.lobby.is_lobby_done(interaction):
             return
         
