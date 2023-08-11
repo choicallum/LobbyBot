@@ -41,7 +41,9 @@ def run():
                 discord.SelectOption(label="PST", emoji="🤢"),
                 discord.SelectOption(label="MST", emoji="🏔"),
                 discord.SelectOption(label="CST", emoji="🐛"),
-                discord.SelectOption(label="EST", emoji="😍")
+                discord.SelectOption(label="EST", emoji="😍"),
+                discord.SelectOption(label="Goose", emoji="🦢"),
+                discord.SelectOption(label="Troll", emoji="🧌")
             ]
         )
         timezoneView = discord.ui.View(timeout=60)
