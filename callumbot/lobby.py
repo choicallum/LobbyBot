@@ -1,6 +1,7 @@
 import discord
 import logging
 import pytz 
+import traceback
 
 import datetime as dt
 from datetime import datetime, date
@@ -9,12 +10,12 @@ from timezone import getTimeZone
 logger = logging.getLogger(__name__)
 
 Lobbies = {}
-
-def log_button(interaction: discord.Interaction, name: str):
-    logger.info(f"{interaction.user.name}({interaction.user.id}) pressed {name} button")
+lobby_id = 0
 
 class Lobby:
     def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
+        global lobby_id
+        self.id = lobby_id
         self.owner = owner
         self.time = time
         self.maxPlayers = maxPlayers
@@ -27,6 +28,7 @@ class Lobby:
         self.players = []
         self.fillers = []
         self.players.append(owner)
+        lobby_id += 1
 
     def create_embed(self) -> discord.Embed:
         embed = discord.Embed(
@@ -34,7 +36,7 @@ class Lobby:
             color=discord.Color.blue())
         embed.add_field(name="Players", value = "\n".join([f"<@{player}>" for player in self.players]), inline=True)
         embed.add_field(name="Fillers", value = "\n".join([f"<@{filler}>" for filler in self.fillers]), inline=True)
-        embed.set_footer(text=f"Max players: {self.maxPlayers}")  
+        embed.set_footer(text=f"ID: {self.id} | Max players: {self.maxPlayers}")  
         return embed
 
     def in_lobby(self, user_id: int) -> bool:
@@ -46,16 +48,10 @@ class Lobby:
         if self.message:
             oldmsg = await self.channel.fetch_message(self.message)
             await oldmsg.delete()
-
-            await interaction.response.send_message(embed=new_embed, view=self.view)
-            interMsg = await interaction.original_response() # expires in 15 minutes
-            self.message = interMsg.id
-            self.channel = interaction.channel
-        else:
-            await interaction.response.send_message(embed=new_embed, view=self.view)
-            interMsg = await interaction.original_response() # expires in 15 minutes
-            self.message = interMsg.id
-            self.channel = interaction.channel
+        await interaction.response.send_message(embed=new_embed, view=self.view)
+        interMsg = await interaction.original_response() # expires in 15 minutes
+        self.message = interMsg.id
+        self.channel = interaction.channel
 
     async def is_lobby_done(self, interaction: discord.Interaction) -> bool:
         if self.completed:
@@ -63,11 +59,14 @@ class Lobby:
         
         return self.completed
     
-    def __str__(self):
+    def __str__(self, delimiter="\n"):
         player_list = ", ".join([f"<@{player}>" for player in self.players])
         filler_list = ", ".join([f"<@{filler}>" for filler in self.fillers])
-        parts = [f"Owner: <@{self.owner}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time}", f"Players: {player_list}", f"Fillers: {filler_list}"]
-        return "\n".join(parts)
+        parts = [f"ID: {self.id}",f"Owner: <@{self.owner}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time} (<t:{self.time}>)", f"Players: {player_list}", f"Fillers: {filler_list}"]
+        return delimiter.join(parts)
+    
+    def log_button(self, interaction: discord.Interaction, name: str):
+        logger.info(f"Lobby {self.id}: {interaction.user.name}({interaction.user.id}) pressed {name} button. Old state: {self.__str__(', ')}.")
 
 async def show_all_lobbies(interaction: discord.Interaction):
     if len(Lobbies) == 0:
@@ -77,7 +76,7 @@ async def show_all_lobbies(interaction: discord.Interaction):
     embed = discord.Embed(
         title= f"All Active Lobbies", 
         color=discord.Color.blue())
-    embed.add_field(name="Lobbies", value = "\n---".join([f"{lobby}" for lobby in Lobbies.values()]), inline=True)
+    embed.add_field(name="Lobbies", value = "\n---\n".join([f"{lobby}" for lobby in Lobbies.values()]), inline=True)
     await interaction.response.send_message(embed=embed)
 
 
@@ -88,6 +87,10 @@ async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sen
         message = "You did not have an active lobby. 😒"
         ephemeral = True
     else:
+        stack_trace = traceback.format_stack()
+        for line in stack_trace:
+            logger.info(line.strip())
+    
         message = "Lobby successfully closed. 🔒"
         ephemeral = False
         Lobbies[user_id].completed = True
@@ -106,7 +109,7 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary, custom_id="play_button")
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_button(interaction, "play")
+        self.lobby.log_button(interaction, "play")
         if await self.lobby.is_lobby_done(interaction):
             return
         
@@ -124,7 +127,7 @@ class LobbyView(discord.ui.View):
     
     @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary, custom_id="fill_button")
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_button(interaction, "fill")
+        self.lobby.log_button(interaction, "fill")
         if await self.lobby.is_lobby_done(interaction):
             return
         user = interaction.user.id
@@ -139,7 +142,7 @@ class LobbyView(discord.ui.View):
 
     @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red, custom_id="leave_button")
     async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_button(interaction, "leave")
+        self.lobby.log_button(interaction, "leave")
         if await self.lobby.is_lobby_done(interaction):
             return
         user = interaction.user.id
@@ -154,7 +157,7 @@ class LobbyView(discord.ui.View):
     
     @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green, custom_id="start_button")
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_button(interaction, "start")
+        self.lobby.log_button(interaction, "start")
         if await self.lobby.is_lobby_done(interaction):
             return
         
@@ -178,7 +181,7 @@ class LobbyView(discord.ui.View):
         
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        log_button(interaction, "close")
+        self.lobby.log_button(interaction, "close")
         if await self.lobby.is_lobby_done(interaction):
             return
         
@@ -233,7 +236,7 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         Lobbies[owner] = lobby
 
     view = LobbyView(timeout=timeout, lobby=lobby)
-    logger.info(f"New LobbyView was created, which will timeout in {timeout} seconds, which is at {start_time + dt.timedelta(seconds=timeout)}")
+    logger.info(f"New LobbyView was created for the lobby: {view.lobby.__str__(', ')} which will timeout in {timeout} seconds, which is at {start_time + dt.timedelta(seconds=timeout)}")
     lobby.view = view
 
     await lobby.update_message(interaction)
