@@ -107,7 +107,7 @@ class LobbyView(discord.ui.View):
         super().__init__(timeout=timeout)
         self.lobby = lobby
 
-    @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary, custom_id="play_button")
+    @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary)
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "play")
         if await self.lobby.is_lobby_done(interaction):
@@ -125,11 +125,12 @@ class LobbyView(discord.ui.View):
         else:
             await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
     
-    @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary, custom_id="fill_button")
+    @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary)
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "fill")
         if await self.lobby.is_lobby_done(interaction):
             return
+        
         user = interaction.user.id
         if user in self.lobby.fillers:
             await interaction.response.send_message(content="You're already filling in this lobby! 😡", ephemeral=True)
@@ -140,7 +141,7 @@ class LobbyView(discord.ui.View):
         self.lobby.fillers.append(user)
         await self.lobby.update_message(interaction)
 
-    @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red, custom_id="leave_button")
+    @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red)
     async def leave_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "leave")
         if await self.lobby.is_lobby_done(interaction):
@@ -155,7 +156,7 @@ class LobbyView(discord.ui.View):
             return
         await self.lobby.update_message(interaction)
     
-    @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green, custom_id="start_button")
+    @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green)
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "start")
         if await self.lobby.is_lobby_done(interaction):
@@ -179,7 +180,7 @@ class LobbyView(discord.ui.View):
         else: 
             await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
         
-    @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red, custom_id="close_button")
+    @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red)
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "close")
         if await self.lobby.is_lobby_done(interaction):
