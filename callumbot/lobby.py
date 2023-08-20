@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 Lobbies = {}
 lobby_id = 0
+ASAP_TIME = -1
 
 class Lobby:
     def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
@@ -31,9 +32,16 @@ class Lobby:
         lobby_id += 1
 
     def create_embed(self) -> discord.Embed:
+        description = f"This is a {self.game} lobby starting"
+        if self.time == ASAP_TIME:
+            description += " ASAP"
+        else: 
+            description += f" at <t:{self.time}:t>"
+
         embed = discord.Embed(
-            description= f"This is a {self.game} lobby starting at <t:{self.time}:t>", 
-            color=discord.Color.blue())
+            description=description,
+            color=discord.Color.blue()
+        )
         embed.add_field(name="Players", value = "\n".join([f"<@{player}>" for player in self.players]), inline=True)
         embed.add_field(name="Fillers", value = "\n".join([f"<@{filler}>" for filler in self.fillers]), inline=True)
         embed.set_footer(text=f"ID: {self.id} | Max players: {self.maxPlayers}")  
@@ -203,9 +211,9 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         return
 
     #Try to parse the time input.
-    if time.lower() == "now":
-        start_time = datetime.now() + dt.timedelta(minutes=1)
-        utc_time = int(start_time.timestamp())
+    if time.lower() == "now" or time.lower() =="asap":
+        start_time = datetime.now()
+        utc_time = ASAP_TIME
     else:
         try:
             if ':' in time:

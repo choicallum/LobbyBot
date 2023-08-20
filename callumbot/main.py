@@ -44,7 +44,7 @@ def run():
     @bot.tree.command(name="lobby", description="Starts a new lobby")
     async def lobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
         """
-        :param time: eg. 4PM, 4:20PM or now. What time you want the lobby to start.
+        :param time: eg. 4PM, 4:20PM or asap/now. What time you want the lobby to start.
         :param lobby_size: Max number of players in the lobby.
         :param game: The game being played.
         """
