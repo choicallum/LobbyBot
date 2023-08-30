@@ -5,7 +5,7 @@ import logging
 from discord.ext import commands
 
 # src imports
-from lobby import close_lobby_by_uid, makeLobby, show_all_lobbies
+from lobby import close_lobby_by_uid, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
 from timezone import setTimeZone
 from settings import DISCORD_API_SECRET
 
@@ -64,11 +64,24 @@ def run():
         log_cmd_start(interaction, "close")
         await close_lobby_by_uid(interaction.user.id, interaction, True, True)
         
-    @bot.tree.command(name="showall", description="shows all active lobbies")
-    async def showall(interaction: discord.Interaction):
-        log_cmd_start(interaction, "showall")
-        await show_all_lobbies(interaction)
+    @bot.tree.command(name="show", description="Gives you a list of all the lobbies and lets you bump one of them")
+    async def show(interaction: discord.Interaction):
+        log_cmd_start(interaction, "show")
+        await show_lobbies(interaction)
+
+    @bot.tree.command(name="bump", description="Bump your own (or someone else's) lobby.")
+    async def bump(interaction: discord.Interaction, owner: discord.Member=None):
+        log_cmd_start(interaction, "bump")
+        if owner == None:
+            owner = interaction.user
+
+        await bump_lobby(interaction, owner)
     
+    @bot.tree.command(name="add", description="Adds a user to your owned lobby.")
+    async def add(interaction: discord.Interaction, player: discord.Member):
+        log_cmd_start(interaction, "add")
+        await add_player_to_lobby(interaction, interaction.user, player)
+        
     bot.run(DISCORD_API_SECRET, root_logger=True)
     
 if __name__ == "__main__":

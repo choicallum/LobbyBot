@@ -4,17 +4,17 @@ import pytz
 import traceback
 
 import datetime as dt
-from datetime import datetime, date
 
+from datetime import datetime, date
+from typing import Union, Dict
 from timezone import getTimeZone
 logger = logging.getLogger(__name__)
 
-Lobbies = {}
 lobby_id = 0
-ASAP_TIME = -1
+ASAP_TIME = "ASAP"
 
 class Lobby:
-    def __init__(self, owner: int, time: int, maxPlayers: int, game: str):
+    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str):
         global lobby_id
         self.id = lobby_id
         self.owner = owner
@@ -28,9 +28,24 @@ class Lobby:
         self.channel = None
         self.players = []
         self.fillers = []
-        self.players.append(owner)
+        self.players.append(owner.id)
         lobby_id += 1
 
+    async def add_player(self, interaction: discord.Interaction, player: discord.Member):
+        if await self.is_lobby_done(interaction):
+            return
+        
+        if player.id in self.players:
+            await interaction.response.send_message(content="You're already playing in this lobby! 😡", ephemeral=True)
+            return
+        if len(self.players) < self.maxPlayers:
+            if player.id in self.fillers: 
+                self.fillers.remove(player.id)
+            self.players.append(player.id)
+            await self.update_message(interaction)
+        else:
+            await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
+        
     def create_embed(self) -> discord.Embed:
         description = f"This is a {self.game} lobby starting"
         if self.time == ASAP_TIME:
@@ -70,24 +85,60 @@ class Lobby:
     def __str__(self, delimiter="\n"):
         player_list = ", ".join([f"<@{player}>" for player in self.players])
         filler_list = ", ".join([f"<@{filler}>" for filler in self.fillers])
-        parts = [f"ID: {self.id}",f"Owner: <@{self.owner}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time} (<t:{self.time}>)", f"Players: {player_list}", f"Fillers: {filler_list}"]
+        parts = [f"ID: {self.id}",f"Owner: <@{self.owner.id}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time} (<t:{self.time}>)", f"Players: {player_list}", f"Fillers: {filler_list}"]
         return delimiter.join(parts)
     
     def log_button(self, interaction: discord.Interaction, name: str):
         logger.info(f"Lobby {self.id}: {interaction.user.name}({interaction.user.id}) pressed {name} button. Old state: {self.__str__(', ')}.")
 
-async def show_all_lobbies(interaction: discord.Interaction):
+# A list of all the active lobbies.
+Lobbies: Dict[int, Lobby] = {}
+
+async def show_lobbies(interaction: discord.Interaction):
     if len(Lobbies) == 0:
         await interaction.response.send_message("There are no currently active lobbies!")
         return
     
-    embed = discord.Embed(
-        title= f"All Active Lobbies", 
-        color=discord.Color.blue())
-    embed.add_field(name="Lobbies", value = "\n---\n".join([f"{lobby}" for lobby in Lobbies.values()]), inline=True)
-    await interaction.response.send_message(embed=embed)
+    timezone = await getTimeZone(interaction)
+    if timezone == "":
+        return
+    
+    options = []
+    for index, lobby in Lobbies.items():
+        if lobby.time != ASAP_TIME:
+            utc_time = datetime.utcfromtimestamp(lobby.time)
+            time_str = utc_time.replace(tzinfo=pytz.utc).astimezone(pytz.timezone(timezone)).strftime("%I:%M %p")
+        else:
+            time_str = ASAP_TIME
+        options.append(discord.SelectOption(label=f"ID: {lobby.id} - Owner: {lobby.owner.name} - {time_str}", value=index))
+    
+    select = discord.ui.Select(
+        placeholder="Which lobby? 🤔",
+        options=options
+    )
+    view = discord.ui.View(timeout=60)
+    view.add_item(select)
+    await interaction.response.send_message(view=view, ephemeral=True)
+    async def on_select(interaction: discord.Interaction):
+        await Lobbies[int(select.values[0])].update_message(interaction)
 
+    select.callback = on_select
 
+async def bump_lobby(interaction: discord.Interaction, user: discord.Member):
+    if user.id not in Lobbies:
+        interaction.response.send_message(f"{user.name} did not have an active lobby 😔", ephemeral=True)
+        return
+    
+    await Lobbies[user.id].update_message(interaction)
+
+async def add_player_to_lobby(interaction: discord.Interaction, owner: discord.Member, addee: discord.Member):
+    if owner.id not in Lobbies:
+        await interaction.response.send_message(f"{owner.name} did not have an active lobby 😔", ephemeral=True)
+        return
+    
+    await Lobbies[owner.id].add_player(interaction, addee)
+    
+    
 async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
     message = ""
     ephemeral = True
@@ -118,20 +169,7 @@ class LobbyView(discord.ui.View):
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary)
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "play")
-        if await self.lobby.is_lobby_done(interaction):
-            return
-        
-        user = interaction.user.id
-        if user in self.lobby.players:
-            await interaction.response.send_message(content="You're already playing in this lobby! 😡", ephemeral=True)
-            return
-        if len(self.lobby.players) < self.lobby.maxPlayers:
-            if user in self.lobby.fillers: 
-                self.lobby.fillers.remove(user)
-            self.lobby.players.append(user)
-            await self.lobby.update_message(interaction)
-        else:
-            await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
+        await self.lobby.add_player(interaction, interaction.user)
     
     @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary)
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -183,7 +221,7 @@ class LobbyView(discord.ui.View):
             message = ["Your game is ready!\n"]
             for player in playerList:
                 message.append(f"<@{player}>")
-            await close_lobby_by_uid(self.lobby.owner, interaction, False, False)
+            await close_lobby_by_uid(self.lobby.owner.id, interaction, False, False)
             await interaction.response.send_message(content=''.join(message))
         else: 
             await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
@@ -194,20 +232,19 @@ class LobbyView(discord.ui.View):
         if await self.lobby.is_lobby_done(interaction):
             return
         
-        if interaction.user.id != self.lobby.owner:
+        if interaction.user.id != self.lobby.owner.id:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
             return
-        await close_lobby_by_uid(self.lobby.owner, interaction, True, True)
+        await close_lobby_by_uid(self.lobby.owner.id, interaction, True, True)
 
 async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
     if lobby_size < 0:
         await interaction.response.send_message("The lobby size must be greater than 0.", ephemeral=True)
         return
         
-    owner = interaction.user.id
-    timezone = getTimeZone(owner)
+    owner = interaction.user
+    timezone = await getTimeZone(interaction)
     if timezone == "":
-        await interaction.response.send_message("Your timezone has not been set yet. Please use /set to set your timezone.", ephemeral=True)
         return
 
     #Try to parse the time input.
@@ -229,20 +266,20 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         localized_time = pytz.timezone(timezone).localize(start_time)
         utc_time = int(localized_time.timestamp())
 
-    timeUntilLobby = int(start_time.timestamp()) - int(datetime.now().timestamp())
-    # if the user meant tomorrow (i.e. 1am tmrw when it's 11pm today, then move it by a day)
-    if timeUntilLobby < 0:
-        utc_time = utc_time + 86400 #86400 is 1 day in seconds.
-        start_time += dt.timedelta(days=1)
+        timeUntilLobby = int(start_time.timestamp()) - int(datetime.now().timestamp())
+        # if the user meant tomorrow (i.e. 1am tmrw when it's 11pm today, then move it by a day)
+        if timeUntilLobby < 0:
+            utc_time = utc_time + 86400 #86400 is 1 day in seconds.
+            start_time += dt.timedelta(days=1)
 
     timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 43200 # 12 hours
     
-    if owner in Lobbies:
+    if owner.id in Lobbies:
         await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
         return
     else:
         lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game)
-        Lobbies[owner] = lobby
+        Lobbies[owner.id] = lobby
 
     view = LobbyView(timeout=timeout, lobby=lobby)
     logger.info(f"New LobbyView was created for the lobby: {view.lobby.__str__(', ')} which will timeout in {timeout} seconds, which is at {start_time + dt.timedelta(seconds=timeout)}")

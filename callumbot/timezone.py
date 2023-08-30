@@ -5,11 +5,12 @@ from pathlib import Path
 from settings import USERS_PATH
 
 logger = logging.getLogger(__name__)
-def getTimeZone(userId: str) -> str:
-    user_file = Path(f'{USERS_PATH}/{userId}.txt')
+async def getTimeZone(interaction: discord.Interaction) -> str:
+    user_file = Path(f'{USERS_PATH}/{interaction.user.id}.txt')
     if not user_file.exists():
-        logger.info(f"Failed to find {userId}'s timezone data file")
-        return ''    
+        logger.info(f"Failed to find {interaction.user.id}'s timezone data file")
+        await interaction.response.send_message("Your timezone has not been set yet. Please use /set to set your timezone.", ephemeral=True)
+        return ""
     with user_file.open() as f:
         return f.read()
 
