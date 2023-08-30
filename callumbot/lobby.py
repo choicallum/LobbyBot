@@ -96,7 +96,7 @@ Lobbies: Dict[int, Lobby] = {}
 
 async def show_lobbies(interaction: discord.Interaction):
     if len(Lobbies) == 0:
-        await interaction.response.send_message("There are no currently active lobbies!")
+        await interaction.response.send_message("There are no currently active lobbies!", ephemeral=True)
         return
     
     timezone = await getTimeZone(interaction)
