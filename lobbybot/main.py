@@ -29,7 +29,7 @@ def run():
 
         await bot.tree.sync()
         logger.info("synced!")
-        logger.info("CallumBot is online!")
+        logger.info("Bot is online!")
 
     @bot.tree.command(name="ping", description="Pong!")
     async def ping(interaction: discord.Interaction):
