@@ -98,7 +98,8 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
    USERS_PATH = '/LobbyBot/users'
    LOG_PATH = '/LobbyBot/logs'
    ```
-6. Run main.py!
+6. Rename `.env.example` to `.env`
+7. Run main.py!
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
