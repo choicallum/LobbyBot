@@ -52,8 +52,9 @@
 ## About The Project
 
 LobbyBot is a lightweight discord bot allowing users to plan lobbies for gaming or social events on discord. 
+
 It is NOT publically hosted as of now, but can easily be setup on a free trial of an EC2 AWS instance, or any other cloud setup (or even locally!).
-9
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
@@ -82,6 +83,7 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
    * Add Reactions
    * Use Slash Commands
    * Manage Messages
+  
     Then, add the bot to your server.
 3. Clone the repo
    ```sh
