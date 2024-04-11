@@ -146,9 +146,9 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@CallumChoi](https://twitter.com/callumchoi?lang=en) - choicallum@gmail.com
+[@CallumChoi](https://twitter.com/callumchoi?lang=en) - choicallum@gmail.com
 
-Project Link: [https://github.com/choicallum/LobbyBot](https://github.com/choicallum/LobbyBot)
+[https://github.com/choicallum/LobbyBot](https://github.com/choicallum/LobbyBot)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

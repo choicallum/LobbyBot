@@ -6,12 +6,22 @@ import traceback
 import datetime as dt
 
 from datetime import datetime, date
-from typing import Union, Dict
+from typing import Union, Dict, List
 from timezone import getTimeZone
 logger = logging.getLogger(__name__)
 
 lobby_id = 0
 ASAP_TIME = "ASAP"
+
+class Player:
+    def __init__(self, id: int, forceAdded: bool = False):
+        self.id = id
+        self.forceAdded = forceAdded
+    
+    def __eq__(self, other):
+        if isinstance(other, Player):
+            return self.id == other.id
+        return self.id == other
 
 class Lobby:
     def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str):
@@ -26,12 +36,12 @@ class Lobby:
         self.view = None
         self.message = None
         self.channel = None
-        self.players = []
-        self.fillers = []
-        self.players.append(owner.id)
+        self.players: list[Player] = list()
+        self.fillers: list[Player] = list()
+        self.players.append(Player(owner.id))
         lobby_id += 1
 
-    async def add_player(self, interaction: discord.Interaction, player: discord.Member):
+    async def add_player(self, interaction: discord.Interaction, player: discord.Member, forced: bool):
         if await self.is_lobby_done(interaction):
             return
         
@@ -40,8 +50,8 @@ class Lobby:
             return
         if len(self.players) < self.maxPlayers:
             if player.id in self.fillers: 
-                self.fillers.remove(player.id)
-            self.players.append(player.id)
+                self.fillers.remove(Player(player.id))
+            self.players.append(Player(player.id, forced))
             await self.update_message(interaction)
         else:
             await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
@@ -57,13 +67,13 @@ class Lobby:
             description=description,
             color=discord.Color.blue()
         )
-        embed.add_field(name="Players", value = "\n".join([f"<@{player}>" for player in self.players]), inline=True)
-        embed.add_field(name="Fillers", value = "\n".join([f"<@{filler}>" for filler in self.fillers]), inline=True)
+        embed.add_field(name="Players", value = "\n".join([f"<@{player.id}> (force added)" if player.forceAdded else f"<@{player.id}>" for player in self.players]), inline=True)
+        embed.add_field(name="Fillers", value = "\n".join([f"<@{filler.id}>" for filler in self.fillers]), inline=True)
         embed.set_footer(text=f"ID: {self.id} | Max players: {self.maxPlayers}")  
         return embed
 
     def in_lobby(self, user_id: int) -> bool:
-        return user_id in self.players or user_id in self.fillers
+        return any(player.id == user_id for player in self.players) or any(player.id == user_id for player in self.fillers)
     
     async def update_message(self, interaction: discord.Interaction):
         """ completes the interaction by sending a new message of the embed """
@@ -83,8 +93,8 @@ class Lobby:
         return self.completed
     
     def __str__(self, delimiter="\n"):
-        player_list = ", ".join([f"<@{player}>" for player in self.players])
-        filler_list = ", ".join([f"<@{filler}>" for filler in self.fillers])
+        player_list = ", ".join([f"<@{player.id}>" for player in self.players])
+        filler_list = ", ".join([f"<@{filler.id}>" for filler in self.fillers])
         parts = [f"ID: {self.id}",f"Owner: <@{self.owner.id}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time} (<t:{self.time}>)", f"Players: {player_list}", f"Fillers: {filler_list}"]
         return delimiter.join(parts)
     
@@ -131,12 +141,12 @@ async def bump_lobby(interaction: discord.Interaction, user: discord.Member):
     
     await Lobbies[user.id].update_message(interaction)
 
-async def add_player_to_lobby(interaction: discord.Interaction, owner: discord.Member, addee: discord.Member):
+async def add_player_to_lobby(interaction: discord.Interaction, owner: discord.Member, addee: discord.Member, forced: bool):
     if owner.id not in Lobbies:
         await interaction.response.send_message(f"{owner.name} did not have an active lobby 😔", ephemeral=True)
         return
     
-    await Lobbies[owner.id].add_player(interaction, addee)
+    await Lobbies[owner.id].add_player(interaction, addee, forced)
     
     
 async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
@@ -169,7 +179,7 @@ class LobbyView(discord.ui.View):
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary)
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "play")
-        await self.lobby.add_player(interaction, interaction.user)
+        await self.lobby.add_player(interaction, interaction.user, forced=False)
     
     @discord.ui.button(label="I will fill", style=discord.ButtonStyle.secondary)
     async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -184,7 +194,7 @@ class LobbyView(discord.ui.View):
         
         if user in self.lobby.players: 
             self.lobby.players.remove(user)
-        self.lobby.fillers.append(user)
+        self.lobby.fillers.append(Player(user))
         await self.lobby.update_message(interaction)
 
     @discord.ui.button(label="I no longer want to play", style=discord.ButtonStyle.red)
@@ -220,7 +230,7 @@ class LobbyView(discord.ui.View):
         if len(playerList) == self.lobby.maxPlayers:
             message = ["Your game is ready!\n"]
             for player in playerList:
-                message.append(f"<@{player}>")
+                message.append(f"<@{player.id}>")
             await close_lobby_by_uid(self.lobby.owner.id, interaction, False, False)
             await interaction.response.send_message(content=''.join(message))
         else: 

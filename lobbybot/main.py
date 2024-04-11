@@ -77,10 +77,10 @@ def run():
 
         await bump_lobby(interaction, owner)
     
-    @bot.tree.command(name="add", description="Adds a user to your owned lobby.")
+    @bot.tree.command(name="forceadd", description="Force adds a user to your owned lobby.")
     async def add(interaction: discord.Interaction, player: discord.Member):
-        log_cmd_start(interaction, "add")
-        await add_player_to_lobby(interaction, interaction.user, player)
+        log_cmd_start(interaction, "forceadd")
+        await add_player_to_lobby(interaction, interaction.user, player, forced=True)
         
     bot.run(DISCORD_API_SECRET, root_logger=True)
     
