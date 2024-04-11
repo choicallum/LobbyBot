@@ -27,22 +27,14 @@
     <li>
       <a href="#about-the-project">About The Project</a>
       <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
         <li><a href="#prerequisites">Prerequisites</a></li>
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
   </ol>
 </details>
 
@@ -98,7 +90,8 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
    USERS_PATH = '/LobbyBot/users'
    LOG_PATH = '/LobbyBot/logs'
    ```
-6. Run main.py!
+6. Rename `.env.example` to `.env`
+7. Run main.py!
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
