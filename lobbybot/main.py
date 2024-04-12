@@ -36,6 +36,12 @@ def run():
         log_cmd_start(interaction, "ping")
         await interaction.response.send_message("Pong!")
     
+    #TODO: implement help
+    #@bot.tree.command(name="help", description="Lists and describes LobbyBot's commands")
+    #async def ping(interaction: discord.Interaction):
+    #    log_cmd_start(interaction, "help")
+    #    await interaction.response.send_message("Pong!")
+
     @bot.tree.command(name="set", description="Set your time zone")
     async def set(interaction: discord.Interaction):
         log_cmd_start(interaction, "set")

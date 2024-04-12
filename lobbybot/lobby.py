@@ -57,14 +57,9 @@ class Lobby:
             await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
         
     def create_embed(self) -> discord.Embed:
-        description = f"This is a {self.game} lobby starting"
-        if self.time == ASAP_TIME:
-            description += " ASAP"
-        else: 
-            description += f" at <t:{self.time}:t>"
-
-        embed = discord.Embed(
-            description=description,
+        time = "ASAP" if self.time == ASAP_TIME else f"<t:{self.time}:t>"
+        embed = discord.Embed (
+            title = f"{self.owner.display_name}'s {self.game} Lobby - {time}",
             color=discord.Color.blue()
         )
         embed.add_field(name="Players", value = "\n".join([f"<@{player.id}> (force added)" if player.forceAdded else f"<@{player.id}>" for player in self.players]), inline=True)
@@ -269,7 +264,7 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
                 input_time = datetime.strptime(time, "%I%p")
         except ValueError:
             logger.info(f"Parsing start time failed. Input: {time}")
-            await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `now`.", ephemeral=True)
+            await interaction.response.send_message("Invalid time format. Please use `[hour]:[minutes][AM|PM]`, `[hour][AM|PM]`, or `asap/now`.", ephemeral=True)
             return
         today = date.today()
         start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
