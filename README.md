@@ -85,11 +85,12 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
    ```py
    DISCORD_API_TOKEN = 'ENTER YOUR API KEY'
    ```
-5. Create and enter the paths for the Users and Logs folders.
+5. Create and enter the paths for the Users and Logs folders. By default, it should be:
    ```py
    USERS_PATH = '/LobbyBot/users'
    LOG_PATH = '/LobbyBot/logs'
    ```
+   Also, if you want to make any lobbies bump themselves constantly in one channel, add the channel id to the config as well.
 6. Rename `.env.example` to `.env`
 7. Run main.py!
 

@@ -9,6 +9,7 @@ load_dotenv()
 DISCORD_API_SECRET = os.getenv("DISCORD_API_TOKEN")
 USERS_PATH = os.getenv("USERS_PATH")
 LOG_PATH = os.getenv("LOG_PATH")
+BUMP_LOBBY_CHANNEL_ID = int(os.getenv("BUMP_LOBBY_CHANNEL_ID"))
 
 logger.setLevel(logging.INFO)
 # logger.setLevel(logging.DEBUG)

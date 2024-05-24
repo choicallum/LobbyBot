@@ -2,12 +2,15 @@ import discord
 import logging
 import pytz 
 import traceback
+import asyncio
 
 import datetime as dt
 
 from datetime import datetime, date
 from typing import Union, Dict, List
 from timezone import getTimeZone
+from settings import BUMP_LOBBY_CHANNEL_ID
+
 logger = logging.getLogger(__name__)
 
 lobby_id = 0
@@ -24,14 +27,16 @@ class Player:
         return self.id == other
 
 class Lobby:
-    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str):
+    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str, spam: bool):
         global lobby_id
         self.id = lobby_id
         self.owner = owner
         self.time = time
         self.maxPlayers = maxPlayers
         self.game = game
+        self.spam = spam
 
+        self.active = False
         self.completed = False
         self.view = None
         self.message = None
@@ -58,9 +63,13 @@ class Lobby:
         
     def create_embed(self) -> discord.Embed:
         time = "ASAP" if self.time == ASAP_TIME else f"<t:{self.time}:t>"
+        if self.active:
+            color = discord.Color.red()
+        else:
+            color = discord.Color.blue()
         embed = discord.Embed (
             title = f"{self.owner.display_name}'s {self.game} Lobby - {time}",
-            color=discord.Color.blue()
+            color=color
         )
         embed.add_field(name="Players", value = "\n".join([f"<@{player.id}> (force added)" if player.forceAdded else f"<@{player.id}>" for player in self.players]), inline=True)
         embed.add_field(name="Fillers", value = "\n".join([f"<@{filler.id}>" for filler in self.fillers]), inline=True)
@@ -80,6 +89,14 @@ class Lobby:
         interMsg = await interaction.original_response() # expires in 15 minutes
         self.message = interMsg.id
         self.channel = interaction.channel
+
+    async def update_message_no_interaction(self, channel):
+        new_embed = self.create_embed()
+        if self.message:
+            old_msg = await self.channel.fetch_message(self.message)
+            await old_msg.delete()
+        new_msg = await self.channel.send(embed=new_embed, view=self.view)
+        self.message = new_msg.id
 
     async def is_lobby_done(self, interaction: discord.Interaction) -> bool:
         if self.completed:
@@ -166,11 +183,12 @@ async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sen
     if sendMessage:
         await interaction.response.send_message(content=message, ephemeral=ephemeral)
 
+## inactive lobby view
 class LobbyView(discord.ui.View):
     def __init__(self, timeout: int, lobby: Lobby):
         super().__init__(timeout=timeout)
         self.lobby = lobby
-
+    
     @discord.ui.button(label="I am a gamer", style=discord.ButtonStyle.primary)
     async def play_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "play")
@@ -212,7 +230,6 @@ class LobbyView(discord.ui.View):
         self.lobby.log_button(interaction, "start")
         if await self.lobby.is_lobby_done(interaction):
             return
-        
         if interaction.user.id not in self.lobby.players and interaction.user.id not in self.lobby.fillers:
             await interaction.response.send_message(content="You aren't in this lobby! 😡", ephemeral=True)
             return
@@ -226,8 +243,12 @@ class LobbyView(discord.ui.View):
             message = ["Your game is ready!\n"]
             for player in playerList:
                 message.append(f"<@{player.id}>")
-            await close_lobby_by_uid(self.lobby.owner.id, interaction, False, False)
-            await interaction.response.send_message(content=''.join(message))
+
+            self.lobby.active = True
+            self.lobby.game = f"Active {self.lobby.game}"
+            self.lobby.view = ActiveLobbyView(timeout=self.timeout, lobby=self.lobby)
+            await self.lobby.channel.send(content=' '.join(message))
+            await self.lobby.update_message(interaction)
         else: 
             await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
         
@@ -239,6 +260,96 @@ class LobbyView(discord.ui.View):
         
         if interaction.user.id != self.lobby.owner.id:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
+            return
+        await close_lobby_by_uid(self.lobby.owner.id, interaction, True, True)
+        
+class ActiveLobbyView(discord.ui.View):
+    def __init__(self, timeout: int, lobby: Lobby):
+        super().__init__(timeout=timeout)
+        self.lobby = lobby
+        self.strict_ids = []
+
+    @discord.ui.button(label="I want to fill if a spot opens up", style=discord.ButtonStyle.primary)
+    async def fill_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.lobby.log_button(interaction, "fill")
+        if await self.lobby.is_lobby_done(interaction):
+            return
+        
+        user = interaction.user.id
+        if user in self.lobby.fillers:
+            await interaction.response.send_message(content="You're already filling in this lobby! 😡", ephemeral=True)
+            return
+        
+        if user in self.lobby.players: 
+            await interaction.response.send_message(content="HUH? you are already playing. greedy whore.", ephemeral=True)
+            return
+        
+        self.lobby.fillers.append(Player(user))
+        await self.lobby.update_message(interaction)
+
+    async def wait_filler(self, filler):
+        await asyncio.sleep(300)
+        if filler in self.strict_ids: # still in strict ids after 5 minutes
+            self.strict_ids.remove(filler)
+            message = [f"<@{filler}> declined their spot. Anyone is free to join."]
+            for f in self.lobby.fillers:
+                message.append(f"<@{f.id}>")
+            await self.lobby.channel.send(content=' '.join(message))
+        else:
+            return
+
+    @discord.ui.button(label="Drop out of lobby / No longer want to fill", style=discord.ButtonStyle.secondary)
+    async def dropout_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.lobby.log_button(interaction, "dropout_active")
+        if await self.lobby.is_lobby_done(interaction):
+            return
+        user = interaction.user.id
+        if user in self.strict_ids:
+            self.strict_ids.remove(user)
+            message = [f"<@{filler.id}> declined their spot. Anyone is free to join."]
+            for filler in self.lobby.fillers:
+                message.append(f"<@{filler.id}>")
+            await self.lobby.channel.send(content=' '.join(message))
+            return
+        if user in self.lobby.players:
+            self.lobby.players.remove(user)
+            if len(self.lobby.fillers) == 0:
+                await self.lobby.update_message(interaction)
+                await self.lobby.channel.send(content="There are no fillers! This lobby needs fillers! 🐀🐁")
+            else:
+                # ask the first filler, give them 5 minutes, then FFA.
+                filler = self.lobby.fillers[0]
+                await self.lobby.update_message(interaction)
+                await self.lobby.channel.send(content=f"<@{filler.id}>, you are invited to join the lobby! Please click 'Fill In!' within 5 minutes. Press Drop Out to decline.")
+                self.strict_ids.append(filler.id)
+                await self.wait_filler(filler.id)
+        elif user in self.lobby.fillers:
+            self.lobby.fillers.remove(user)
+            await self.lobby.update_message(interaction)
+        else:
+            await interaction.response.send_message(content="You weren't playing or filling in this lobby! 😡", ephemeral=True)
+            return
+
+    @discord.ui.button(label="Fill In!", style=discord.ButtonStyle.green)
+    async def fillin_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.lobby.log_button(interaction, "fillin_active")
+        if interaction.user.id in self.strict_ids:
+            await self.lobby.add_player(interaction, interaction.user, forced=False)
+            self.strict_ids.remove(interaction.user.id)
+        elif len(self.lobby.players) + len(self.strict_ids) == self.lobby.maxPlayers:
+            await interaction.response.send_message(content="You aren't a filler being waited for and/or there is no extra room. ☹", ephemeral=True)
+        elif len(self.lobby.players) + len(self.strict_ids) < self.lobby.maxPlayers:
+            await self.lobby.add_player(interaction, interaction.user, forced=False)
+        else:
+            await interaction.response.send_message(content="A filler wasn't needed yet! 😡", ephemeral=True)
+        
+    @discord.ui.button(label="End Lobby", style=discord.ButtonStyle.red)
+    async def end_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.lobby.log_button(interaction, "end_active")
+        if await self.lobby.is_lobby_done(interaction):
+            return
+        if interaction.user.id not in self.lobby.players:
+            await interaction.response.send_message(content="You are not playing in this lobby!", ephemeral=True)
             return
         await close_lobby_by_uid(self.lobby.owner.id, interaction, True, True)
 
@@ -283,7 +394,12 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
         return
     else:
-        lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game)
+        if interaction.channel_id == BUMP_LOBBY_CHANNEL_ID:
+            spam = True
+        else:
+            spam = False
+        
+        lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game, spam=spam)
         Lobbies[owner.id] = lobby
 
     view = LobbyView(timeout=timeout, lobby=lobby)

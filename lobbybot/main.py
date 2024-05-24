@@ -7,7 +7,8 @@ from discord.ext import commands
 # src imports
 from lobby import close_lobby_by_uid, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
 from timezone import setTimeZone
-from settings import DISCORD_API_SECRET
+from settings import DISCORD_API_SECRET, BUMP_LOBBY_CHANNEL_ID
+from lobby import Lobbies 
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,14 @@ def run():
         await bot.tree.sync()
         logger.info("synced!")
         logger.info("Bot is online!")
+
+    # bump messages in gundan_lobby
+    @bot.event
+    async def on_message(message):
+        if message.channel.id == BUMP_LOBBY_CHANNEL_ID and not message.author.bot:
+            for id in Lobbies:
+                if Lobbies[id].spam:
+                    await Lobbies[id].update_message_no_interaction(message.channel.id)
 
     @bot.tree.command(name="ping", description="Pong!")
     async def ping(interaction: discord.Interaction):
