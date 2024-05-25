@@ -225,9 +225,10 @@ class LobbyView(discord.ui.View):
             return
         await self.lobby.update_message(interaction)
     
-    @discord.ui.button(label="Start lobby", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Start Lobby", style=discord.ButtonStyle.green)
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "start")
+        
         if await self.lobby.is_lobby_done(interaction):
             return
         if interaction.user.id not in self.lobby.players and interaction.user.id not in self.lobby.fillers:
@@ -239,7 +240,7 @@ class LobbyView(discord.ui.View):
         if needed_players > 0:
             playerList.extend(self.lobby.fillers[:needed_players])
         
-        if len(playerList) == self.lobby.maxPlayers:
+        if len(playerList) == self.lobby.maxPlayers or button.label == "Force Start":
             message = ["Your game is ready!\n"]
             for player in playerList:
                 message.append(f"<@{player.id}>")
@@ -249,9 +250,11 @@ class LobbyView(discord.ui.View):
             self.lobby.view = ActiveLobbyView(timeout=self.timeout, lobby=self.lobby)
             await self.lobby.channel.send(content=' '.join(message))
             await self.lobby.update_message(interaction)
-        else: 
-            await interaction.response.send_message(content="There are not enough players to start this lobby.", ephemeral=True)
-        
+        else:
+            button.label = "Force Start"
+            await self.lobby.update_message(interaction)
+            await interaction.channel.send(content=f"<@{interaction.user.id}> There are not enough players to fill this lobby. Force Start anyways?")
+    
     @discord.ui.button(label="Close lobby", style=discord.ButtonStyle.red)
     async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.lobby.log_button(interaction, "close")
