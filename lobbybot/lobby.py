@@ -284,7 +284,7 @@ class ActiveLobbyView(discord.ui.View):
             return
         
         if user in self.lobby.players: 
-            await interaction.response.send_message(content="HUH? you are already playing. greedy whore.", ephemeral=True)
+            await interaction.response.send_message(content="HUH? you are already playing. silly goose.", ephemeral=True)
             return
         
         self.lobby.fillers.append(Player(user))
