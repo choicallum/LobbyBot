@@ -63,7 +63,7 @@ class Lobby:
             await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
         
     def create_embed(self) -> discord.Embed:
-        time = f"ASAP (Started at <t:{self.started_at}:f>)" if self.time == ASAP_TIME else f"<t:{self.time}:t>"
+        time = f"ASAP (Started at <t:{self.started_at}:t>)" if self.time == ASAP_TIME else f"<t:{self.time}:t>"
         if self.active:
             color = discord.Color.red()
         else:
