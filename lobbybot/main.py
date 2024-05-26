@@ -77,7 +77,7 @@ def run():
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
         log_cmd_start(interaction, "close")
-        await close_lobby_by_uid(interaction.user.id, interaction, True, True)
+        await close_lobby_by_uid(interaction.user.id, interaction)
         
     @bot.tree.command(name="show", description="Gives you a list of all the lobbies and lets you bump one of them")
     async def show(interaction: discord.Interaction):

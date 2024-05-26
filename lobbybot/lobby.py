@@ -27,7 +27,7 @@ class Player:
         return self.id == other
 
 class Lobby:
-    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str, spam: bool):
+    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str, spam: bool, started_at: int):
         global lobby_id
         self.id = lobby_id
         self.owner = owner
@@ -35,6 +35,7 @@ class Lobby:
         self.maxPlayers = maxPlayers
         self.game = game
         self.spam = spam
+        self.started_at = started_at
 
         self.active = False
         self.completed = False
@@ -62,7 +63,7 @@ class Lobby:
             await interaction.response.send_message(content="The lobby is already full 😞", ephemeral=True)
         
     def create_embed(self) -> discord.Embed:
-        time = "ASAP" if self.time == ASAP_TIME else f"<t:{self.time}:t>"
+        time = f"ASAP (Started at <t:{self.started_at}:f>)" if self.time == ASAP_TIME else f"<t:{self.time}:t>"
         if self.active:
             color = discord.Color.red()
         else:
@@ -148,7 +149,7 @@ async def show_lobbies(interaction: discord.Interaction):
 
 async def bump_lobby(interaction: discord.Interaction, user: discord.Member):
     if user.id not in Lobbies:
-        interaction.response.send_message(f"{user.name} did not have an active lobby 😔", ephemeral=True)
+        await interaction.response.send_message(f"{user.name} did not have an active lobby 😔", ephemeral=True)
         return
     
     await Lobbies[user.id].update_message(interaction)
@@ -161,27 +162,26 @@ async def add_player_to_lobby(interaction: discord.Interaction, owner: discord.M
     await Lobbies[owner.id].add_player(interaction, addee, forced)
     
     
-async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction, sendMessage: bool, delete: bool):
+async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction):
     message = ""
     ephemeral = True
     if user_id not in Lobbies:
         message = "You did not have an active lobby. 😒"
         ephemeral = True
     else:
-        stack_trace = traceback.format_stack()
-        for line in stack_trace:
-            logger.info(line.strip())
-    
         message = "Lobby successfully closed. 🔒"
         ephemeral = False
         Lobbies[user_id].completed = True
-        if delete:
-            oldmsg = await Lobbies[user_id].channel.fetch_message(Lobbies[user_id].message)
-            await oldmsg.delete()
+        channel = Lobbies[user_id].channel
+        oldmsg = await Lobbies[user_id].channel.fetch_message(Lobbies[user_id].message)
+        await oldmsg.delete()
         del Lobbies[user_id]
 
-    if sendMessage:
+    if interaction:
         await interaction.response.send_message(content=message, ephemeral=ephemeral)
+    else:
+        await channel.send(content=message)
+    
 
 ## inactive lobby view
 class LobbyView(discord.ui.View):
@@ -264,7 +264,7 @@ class LobbyView(discord.ui.View):
         if interaction.user.id != self.lobby.owner.id:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
             return
-        await close_lobby_by_uid(self.lobby.owner.id, interaction, True, True)
+        await close_lobby_by_uid(self.lobby.owner.id, interaction)
         
 class ActiveLobbyView(discord.ui.View):
     def __init__(self, timeout: int, lobby: Lobby):
@@ -354,8 +354,16 @@ class ActiveLobbyView(discord.ui.View):
         if interaction.user.id not in self.lobby.players:
             await interaction.response.send_message(content="You are not playing in this lobby!", ephemeral=True)
             return
-        await close_lobby_by_uid(self.lobby.owner.id, interaction, True, True)
+        await close_lobby_by_uid(self.lobby.owner.id, interaction)
 
+
+async def close_lobby_auto(lobby: Lobby, timeout):
+    await asyncio.sleep(timeout)
+    print("running!")
+    if lobby and not lobby.completed:
+        await lobby.channel.send(content=f"{lobby.owner.display_name}'s lobby timing out...")
+        await close_lobby_by_uid(lobby.owner.id, None)   
+        
 async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
     if lobby_size < 0:
         await interaction.response.send_message("The lobby size must be greater than 0.", ephemeral=True)
@@ -370,7 +378,9 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
     if time.lower() == "now" or time.lower() =="asap":
         start_time = datetime.now()
         utc_time = ASAP_TIME
+        started_at = int(start_time.timestamp())
     else:
+        started_at = None
         try:
             if ':' in time:
                 input_time = datetime.strptime(time, "%I:%M%p")
@@ -391,7 +401,7 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
             utc_time = utc_time + 86400 #86400 is 1 day in seconds.
             start_time += dt.timedelta(days=1)
 
-    timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 43200 # 12 hours
+    timeout = int(start_time.timestamp()) - int(datetime.now().timestamp()) + 21600 # 6 hours
     
     if owner.id in Lobbies:
         await interaction.response.send_message("You already have an active lobby! If this is a mistake, run /close.", ephemeral=True)
@@ -402,7 +412,7 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         else:
             spam = False
         
-        lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game, spam=spam)
+        lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game, spam=spam, started_at=started_at)
         Lobbies[owner.id] = lobby
 
     view = LobbyView(timeout=timeout, lobby=lobby)
@@ -410,3 +420,4 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
     lobby.view = view
 
     await lobby.update_message(interaction)
+    await close_lobby_auto(lobby, timeout)
