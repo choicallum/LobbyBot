@@ -244,7 +244,13 @@ class LobbyView(discord.ui.View):
             message = ["Your game is ready!\n"]
             for player in playerList:
                 message.append(f"<@{player.id}>")
-
+            # add fillers into players
+            # if it's force starting, add all the players (even tho it might not fill the lobby)
+            if button.label == "Force Start":
+                needed_players = len(self.lobby.fillers)
+            for i in range(0, needed_players):
+                filler = self.lobby.fillers.pop()
+                self.lobby.players.append(filler)
             self.lobby.active = True
             self.lobby.game = f"Active {self.lobby.game}"
             self.lobby.view = ActiveLobbyView(timeout=self.timeout, lobby=self.lobby)
