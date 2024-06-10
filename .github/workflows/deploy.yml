@@ -22,7 +22,7 @@ jobs:
       run: |
         echo "${SSH_PRIVATE_KEY}" > private_key.pem
         chmod 600 private_key.pem
-        ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" << 'EOF'
+        ssh -o ConnectTimeout=10 -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" << 'EOF'
           cd ~/CallumBot
           git pull
           cd ~
