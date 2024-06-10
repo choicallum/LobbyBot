@@ -28,5 +28,6 @@ jobs:
           cd ~
           ./stop.sh
           ./start.sh
+          echo hello
           '
       shell: bash
