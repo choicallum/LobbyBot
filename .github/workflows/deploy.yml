@@ -28,6 +28,5 @@ jobs:
           cd ~
           ./stop.sh
           ./start.sh
-          quit
         EOF
       shell: bash
