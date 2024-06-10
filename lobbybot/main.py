@@ -44,11 +44,13 @@ def run():
         
             # reprint twitter links
             message_content = message.content
-            if "twitter.com" in message_content or "x.com" in message_content and message:
-                message_content = message_content.replace("twitter.com", "fxtwitter.com")
-                message_content = message_content.replace("x.com", "fxtwitter.com")
-                message_content = message_content.replace("fxfxtwitter.com", "fxtwitter.com")
-                await message.channel.send(message.author.display_name + ": " + message_content)
+            pattern = re.compile(r'https?://(twitter\.com|x\.com)/(.+)/status/(\d+)')
+
+            # Replace 'twitter.com' or 'x.com' with 'fxtwitter.com'
+            message_content = re.sub(pattern, r'https://fxtwitter.com/\2/status/\3', message_content)
+
+            if pattern.search(message.content):
+                await message.channel.send(f"{message.author.display_name}: {message_content}")
                 await message.delete()
 
     @bot.tree.command(name="ping", description="Pong!")
