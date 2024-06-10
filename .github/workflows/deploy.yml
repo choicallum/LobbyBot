@@ -27,6 +27,7 @@ jobs:
           git pull
           cd ~
           ./stop.sh
-          ./start.sh
+          ./start.sh &
+          disown
         EOF
       shell: bash
