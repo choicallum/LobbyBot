@@ -22,11 +22,11 @@ jobs:
       run: |
         echo "${SSH_PRIVATE_KEY}" > private_key.pem
         chmod 600 private_key.pem
-        ssh -o ConnectTimeout=10 -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST "bash -s" << 'EOF'
+        ssh -o ConnectTimeout=10 -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST '
           cd ~/CallumBot
           git pull
           cd ~
           ./stop.sh
           ./start.sh
-        EOF
+          '
       shell: bash
