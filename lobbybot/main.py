@@ -1,6 +1,7 @@
 # library imports
 import discord
 import logging
+import re
 
 from discord.ext import commands
 
@@ -34,11 +35,20 @@ def run():
 
     # bump messages in gundan_lobby
     @bot.event
-    async def on_message(message):
-        if message.channel.id == BUMP_LOBBY_CHANNEL_ID and not message.author.bot:
-            for id in Lobbies:
-                if Lobbies[id].spam:
-                    await Lobbies[id].update_message_no_interaction(message.channel.id)
+    async def on_message(message: discord.Message):
+        if not message.author.bot:
+            if message.channel.id == BUMP_LOBBY_CHANNEL_ID and not message.author.bot:
+                for id in Lobbies:
+                    if Lobbies[id].spam:
+                        await Lobbies[id].update_message_no_interaction(message.channel.id)
+        
+            # reprint twitter links
+            message_content = message.content
+            if "twitter.com" in message_content or "x.com" in message_content and message:
+                message_content = message_content.replace("twitter.com", "fxtwitter.com")
+                message_content = message_content.replace("x.com", "fxtwitter.com")
+                await message.channel.send(message.author.display_name + ": " + message_content)
+                await message.delete()
 
     @bot.tree.command(name="ping", description="Pong!")
     async def ping(interaction: discord.Interaction):
