@@ -29,5 +29,6 @@ jobs:
           ./stop.sh
           ./start.sh
           echo hello
+          exit
           '
       shell: bash
