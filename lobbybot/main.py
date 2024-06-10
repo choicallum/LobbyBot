@@ -44,7 +44,7 @@ def run():
         
             # reprint twitter links
             message_content = message.content
-            pattern = re.compile(r'https?://(twitter\.com|x\.com)/(.+)/status/(\d+)')
+            pattern = re.compile(r'https?://(twitter\.com|x\.com)/(.+)/status/(\d+)', re.IGNORECASE)
 
             # Replace 'twitter.com' or 'x.com' with 'fxtwitter.com'
             message_content = re.sub(pattern, r'https://fxtwitter.com/\2/status/\3', message_content)
