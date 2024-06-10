@@ -47,6 +47,7 @@ def run():
             if "twitter.com" in message_content or "x.com" in message_content and message:
                 message_content = message_content.replace("twitter.com", "fxtwitter.com")
                 message_content = message_content.replace("x.com", "fxtwitter.com")
+                message_content = message_content.replace("fxfxtwitter.com", "fxtwitter.com")
                 await message.channel.send(message.author.display_name + ": " + message_content)
                 await message.delete()
 
