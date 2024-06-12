@@ -102,7 +102,6 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
 ## Roadmap
 
 - [ ] Add game integration (i.e. can create certain rank thresholds for lobbies that are checked when you sign up)
-- [ ] Make it so lobbys actually expire after the time finishes
 
 See the [open issues](https://github.com/choicallum/LobbyBot/issues) for a  list of proposed features (and known issues).
 
