@@ -56,7 +56,7 @@ def run():
     @bot.tree.command(name="version", description="What version is CallumBot running?")
     async def version(interaction: discord.Interaction):
         log_cmd_start(interaction, "version")
-        await interaction.response.send_message("68")
+        await interaction.response.send_message("69")
     
     #TODO: implement help
     #@bot.tree.command(name="help", description="Lists and describes LobbyBot's commands")
