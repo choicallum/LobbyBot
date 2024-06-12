@@ -6,10 +6,9 @@ import re
 from discord.ext import commands
 
 # src imports
-from lobby import close_lobby_by_uid, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
+from lobby import close_lobby, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
 from timezone import setTimeZone
-from settings import DISCORD_API_SECRET, BUMP_LOBBY_CHANNEL_ID
-from lobby import Lobbies 
+from settings import DISCORD_API_SECRET
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +36,6 @@ def run():
     @bot.event
     async def on_message(message: discord.Message):
         if not message.author.bot:
-            if message.channel.id == BUMP_LOBBY_CHANNEL_ID and not message.author.bot:
-                for id in Lobbies:
-                    if Lobbies[id].spam:
-                        await Lobbies[id].update_message_no_interaction(message.channel.id)
         
             # reprint twitter links
             message_content = message.content
@@ -90,7 +85,7 @@ def run():
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
         log_cmd_start(interaction, "close")
-        await close_lobby_by_uid(interaction.user.id, interaction)
+        await close_lobby(interaction.user.id, interaction)
         
     @bot.tree.command(name="show", description="Gives you a list of all the lobbies and lets you bump one of them")
     async def show(interaction: discord.Interaction):

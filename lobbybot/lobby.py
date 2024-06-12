@@ -1,7 +1,6 @@
 import discord
 import logging
 import pytz 
-import traceback
 import asyncio
 
 import datetime as dt
@@ -10,6 +9,7 @@ from datetime import datetime, date
 from typing import Union, Dict, List
 from timezone import getTimeZone
 from settings import BUMP_LOBBY_CHANNEL_ID
+from discord.ext import tasks
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,23 @@ class Lobby:
         self.fillers: list[Player] = list()
         self.players.append(Player(owner.id))
         lobby_id += 1
+
+        if self.spam:
+            self.update_message_no_interaction_task.start()
+    
+    @tasks.loop(minutes=1)
+    async def update_message_no_interaction_task(self):
+        print("running")
+        new_embed = self.create_embed()
+        if self.message:
+            last_bot_message = await self.channel.fetch_message(self.message)
+            async for message in self.channel.history(limit=1):
+                # Skip updating if the last message in the channel is the bot's previous message
+                if message.id == last_bot_message.id:
+                    print("chose to skip")
+                    return
+            new_msg = await self.channel.send(embed=new_embed, view=self.view)
+            self.message = new_msg.id
 
     async def add_player(self, interaction: discord.Interaction, player: discord.Member, forced: bool):
         if await self.is_lobby_done(interaction):
@@ -90,14 +107,6 @@ class Lobby:
         interMsg = await interaction.original_response() # expires in 15 minutes
         self.message = interMsg.id
         self.channel = interaction.channel
-
-    async def update_message_no_interaction(self, channel):
-        new_embed = self.create_embed()
-        if self.message:
-            old_msg = await self.channel.fetch_message(self.message)
-            await old_msg.delete()
-        new_msg = await self.channel.send(embed=new_embed, view=self.view)
-        self.message = new_msg.id
 
     async def is_lobby_done(self, interaction: discord.Interaction) -> bool:
         if self.completed:
@@ -162,7 +171,7 @@ async def add_player_to_lobby(interaction: discord.Interaction, owner: discord.M
     await Lobbies[owner.id].add_player(interaction, addee, forced)
     
     
-async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction):
+async def close_lobby(user_id: int, interaction: discord.Interaction):
     message = ""
     ephemeral = True
     if user_id not in Lobbies:
@@ -171,6 +180,7 @@ async def close_lobby_by_uid(user_id: int, interaction: discord.Interaction):
     else:
         message = "Lobby successfully closed. 🔒"
         ephemeral = False
+        Lobbies[user_id].update_message_no_interaction_task.cancel()
         Lobbies[user_id].completed = True
         channel = Lobbies[user_id].channel
         oldmsg = await Lobbies[user_id].channel.fetch_message(Lobbies[user_id].message)
@@ -270,7 +280,7 @@ class LobbyView(discord.ui.View):
         if interaction.user.id != self.lobby.owner.id:
             await interaction.response.send_message(content="You are not the owner of this lobby!", ephemeral=True)
             return
-        await close_lobby_by_uid(self.lobby.owner.id, interaction)
+        await close_lobby(self.lobby.owner.id, interaction)
         
 class ActiveLobbyView(discord.ui.View):
     def __init__(self, timeout: int, lobby: Lobby):
@@ -360,7 +370,7 @@ class ActiveLobbyView(discord.ui.View):
         if interaction.user.id not in self.lobby.players:
             await interaction.response.send_message(content="You are not playing in this lobby!", ephemeral=True)
             return
-        await close_lobby_by_uid(self.lobby.owner.id, interaction)
+        await close_lobby(self.lobby.owner.id, interaction)
 
 
 async def close_lobby_auto(lobby: Lobby, timeout):
@@ -368,7 +378,7 @@ async def close_lobby_auto(lobby: Lobby, timeout):
     print("running!")
     if lobby and not lobby.completed:
         await lobby.channel.send(content=f"{lobby.owner.display_name}'s lobby timing out...")
-        await close_lobby_by_uid(lobby.owner.id, None)   
+        await close_lobby(lobby.owner.id, None)   
         
 async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
     if lobby_size < 0:
