@@ -52,17 +52,17 @@ class Lobby:
     
     @tasks.loop(minutes=1)
     async def update_message_no_interaction_task(self):
-        print("running")
-        new_embed = self.create_embed()
         if self.message:
-            last_bot_message = await self.channel.fetch_message(self.message)
             async for message in self.channel.history(limit=1):
-                # Skip updating if the last message in the channel is the bot's previous message
-                if message.id == last_bot_message.id:
-                    print("chose to skip")
+                # Skip updating if the last message in the channel is also CallumBot
+                if message.author.bot:
                     return
-            new_msg = await self.channel.send(embed=new_embed, view=self.view)
-            self.message = new_msg.id
+                else:
+                    new_embed = self.create_embed()
+                    last_bot_message = await self.channel.fetch_message(self.message)
+                    last_bot_message.delete()
+                    new_msg = await self.channel.send(embed=new_embed, view=self.view)
+                    self.message = new_msg.id
 
     async def add_player(self, interaction: discord.Interaction, player: discord.Member, forced: bool):
         if await self.is_lobby_done(interaction):
