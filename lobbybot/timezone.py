@@ -1,10 +1,10 @@
 import discord
 import logging
-
 from pathlib import Path
 from settings import USERS_PATH
 
 logger = logging.getLogger(__name__)
+
 async def getTimeZone(interaction: discord.Interaction) -> str:
     user_file = Path(f'{USERS_PATH}/{interaction.user.id}.txt')
     if not user_file.exists():
@@ -27,6 +27,7 @@ async def setTimeZone(interaction: discord.Interaction):
     timezoneView = discord.ui.View(timeout=60)
     timezoneView.add_item(select)
     await interaction.response.send_message(view=timezoneView, ephemeral=True)
+    
     async def on_select(interaction: discord.Interaction):
         write_time_zone(interaction.user.id, select.values[0])
         await interaction.response.send_message(content="Your timezone has been set successfully.", ephemeral=True)
@@ -42,5 +43,10 @@ def write_time_zone(userId: str, timezone: str):
     }[timezone]
 
     user_file = Path(f'{USERS_PATH}/{userId}.txt')
+    
+    # Ensure the directory exists
+    user_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Write the timezone to the file
     with user_file.open("w") as f:
         f.write(verboseTimeZone)
