@@ -1,14 +1,17 @@
 import os
 import logging
 
+from pathlib import Path
 from dotenv import load_dotenv
 
 logger = logging.getLogger()
 
 load_dotenv()
 DISCORD_API_SECRET = os.getenv("DISCORD_API_TOKEN")
-USERS_PATH = os.getenv("USERS_PATH")
-LOG_PATH = os.getenv("LOG_PATH")
+BASE_DIR = Path(__file__).parent
+USERS_PATH = BASE_DIR / os.getenv("USERS_PATH")
+LOG_PATH = BASE_DIR / os.getenv("LOG_PATH")
+RESOURCES_PATH = BASE_DIR / os.getenv("RESOURCES_PATH")
 BUMP_LOBBY_CHANNEL_ID = int(os.getenv("BUMP_LOBBY_CHANNEL_ID"))
 
 logger.setLevel(logging.INFO)

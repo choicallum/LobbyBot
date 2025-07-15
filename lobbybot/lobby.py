@@ -27,12 +27,12 @@ class Player:
         return self.id == other
 
 class Lobby:
-    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], maxPlayers: int, game: str, spam: bool, started_at: int):
+    def __init__(self, owner: Union[discord.Member, discord.User], time: Union[int, str], max_players: int, game: str, spam: bool, started_at: int):
         global lobby_id
         self.id = lobby_id
         self.owner = owner
         self.time = time
-        self.maxPlayers = maxPlayers
+        self.max_players = max_players
         self.game = game
         self.spam = spam
         self.started_at = started_at
@@ -73,7 +73,7 @@ class Lobby:
         if player.id in self.players:
             await interaction.response.send_message(content="You're already playing in this lobby! 😡", ephemeral=True)
             return
-        if len(self.players) < self.maxPlayers:
+        if len(self.players) < self.max_players:
             if player.id in self.fillers: 
                 self.fillers.remove(Player(player.id))
             self.players.append(Player(player.id, forced))
@@ -93,7 +93,7 @@ class Lobby:
         )
         embed.add_field(name="Players", value = "\n".join([f"<@{player.id}> (force added)" if player.forceAdded else f"<@{player.id}>" for player in self.players]), inline=True)
         embed.add_field(name="Fillers", value = "\n".join([f"<@{filler.id}>" for filler in self.fillers]), inline=True)
-        embed.set_footer(text=f"ID: {self.id} | Max players: {self.maxPlayers}")  
+        embed.set_footer(text=f"ID: {self.id} | Max players: {self.max_players}")  
         return embed
 
     def in_lobby(self, user_id: int) -> bool:
@@ -119,7 +119,7 @@ class Lobby:
     def __str__(self, delimiter="\n"):
         player_list = ", ".join([f"<@{player.id}>" for player in self.players])
         filler_list = ", ".join([f"<@{filler.id}>" for filler in self.fillers])
-        parts = [f"ID: {self.id}",f"Owner: <@{self.owner.id}>", f"Game: {self.game}", f"Max Players: {self.maxPlayers}", f"Time: {self.time} (<t:{self.time}>)", f"Players: {player_list}", f"Fillers: {filler_list}"]
+        parts = [f"ID: {self.id}",f"Owner: <@{self.owner.id}>", f"Game: {self.game}", f"Max Players: {self.max_players}", f"Time: {self.time} (<t:{self.time}>)", f"Players: {player_list}", f"Fillers: {filler_list}"]
         return delimiter.join(parts)
     
     def log_button(self, interaction: discord.Interaction, name: str):
@@ -247,12 +247,12 @@ class LobbyView(discord.ui.View):
             await interaction.response.send_message(content="You aren't in this lobby! 😡", ephemeral=True)
             return
         
-        playerList = self.lobby.players[:self.lobby.maxPlayers]
-        needed_players = self.lobby.maxPlayers - len(self.lobby.players)
+        playerList = self.lobby.players[:self.lobby.max_players]
+        needed_players = self.lobby.max_players - len(self.lobby.players)
         if needed_players > 0:
             playerList.extend(self.lobby.fillers[:needed_players])
         
-        if len(playerList) == self.lobby.maxPlayers or button.label == "Force Start":
+        if len(playerList) == self.lobby.max_players or button.label == "Force Start":
             message = ["Your game is ready!\n"]
             for player in playerList:
                 message.append(f"<@{player.id}>")
@@ -357,9 +357,9 @@ class ActiveLobbyView(discord.ui.View):
         if interaction.user.id in self.strict_ids:
             await self.lobby.add_player(interaction, interaction.user, forced=False)
             self.strict_ids.remove(interaction.user.id)
-        elif len(self.lobby.players) + len(self.strict_ids) == self.lobby.maxPlayers:
+        elif len(self.lobby.players) + len(self.strict_ids) == self.lobby.max_players:
             await interaction.response.send_message(content="You aren't a filler being waited for and/or there is no extra room. ☹", ephemeral=True)
-        elif len(self.lobby.players) + len(self.strict_ids) < self.lobby.maxPlayers:
+        elif len(self.lobby.players) + len(self.strict_ids) < self.lobby.max_players:
             await self.lobby.add_player(interaction, interaction.user, forced=False)
         else:
             await interaction.response.send_message(content="A filler wasn't needed yet! 😡", ephemeral=True)
@@ -430,7 +430,7 @@ async def makeLobby(interaction: discord.Interaction, time: str, lobby_size: int
         else:
             spam = False
         
-        lobby = Lobby(owner=owner, time=utc_time, maxPlayers=lobby_size, game=game, spam=spam, started_at=started_at)
+        lobby = Lobby(owner=owner, time=utc_time, max_players=lobby_size, game=game, spam=spam, started_at=started_at)
         Lobbies[owner.id] = lobby
 
     view = LobbyView(timeout=timeout, lobby=lobby)

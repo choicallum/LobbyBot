@@ -9,6 +9,7 @@ from discord.ext import commands
 from lobby import close_lobby, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
 from timezone import setTimeZone
 from settings import DISCORD_API_SECRET
+from wordle_grader import grade_wordle
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +110,16 @@ def run():
     async def add(interaction: discord.Interaction, player: discord.Member):
         log_cmd_start(interaction, "forceadd")
         await add_player_to_lobby(interaction, interaction.user, player, forced=True)
+
+    @bot.tree.command(name="gradewordle", description="Grades how well you played Wordle (Hard Mode only)")
+    async def add(interaction: discord.Interaction, guesses: str):
+        """
+        :param guesses: Comma separated guesses. (ex: meows, adieu, blend, where blend was today's wordle)
+        """
+        log_cmd_start(interaction, "gradewordle")
+        await grade_wordle(interaction, guesses)
         
     bot.run(DISCORD_API_SECRET, root_logger=True)
-    
+
 if __name__ == "__main__":
     run()
