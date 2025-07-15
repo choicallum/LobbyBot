@@ -13,6 +13,7 @@ USERS_PATH = BASE_DIR / os.getenv("USERS_PATH")
 LOG_PATH = BASE_DIR / os.getenv("LOG_PATH")
 RESOURCES_PATH = BASE_DIR / os.getenv("RESOURCES_PATH")
 BUMP_LOBBY_CHANNEL_ID = int(os.getenv("BUMP_LOBBY_CHANNEL_ID"))
+VERSION = "2025/07/15 v1"
 
 logger.setLevel(logging.INFO)
 # logger.setLevel(logging.DEBUG)

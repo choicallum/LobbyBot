@@ -8,7 +8,7 @@ from discord.ext import commands
 # src imports
 from lobby import close_lobby, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
 from timezone import setTimeZone
-from settings import DISCORD_API_SECRET
+from settings import DISCORD_API_SECRET, VERSION
 from wordle_grader import grade_wordle
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ def run():
     @bot.tree.command(name="version", description="What version is CallumBot running?")
     async def version(interaction: discord.Interaction):
         log_cmd_start(interaction, "version")
-        await interaction.response.send_message("2024/06/13 v2")
+        await interaction.response.send_message(VERSION)
     
     #TODO: implement help
     #@bot.tree.command(name="help", description="Lists and describes LobbyBot's commands")
