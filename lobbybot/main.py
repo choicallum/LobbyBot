@@ -36,18 +36,20 @@ def run():
     # bump messages in gundan_lobby
     @bot.event
     async def on_message(message: discord.Message):
-        if not message.author.bot:
+        if message.author.bot:
+            return
         
-            # reprint twitter links
-            message_content = message.content
-            pattern = re.compile(r'https?://(twitter\.com|x\.com)/(.+)/status/(\d+)', re.IGNORECASE)
+        # reprint twitter links
+        message_content = message.content
+        
+        pattern = re.compile(r'https?://(twitter\.com|x\.com)/(.+)/status/(\d+)', re.IGNORECASE)
 
-            # Replace 'twitter.com' or 'x.com' with 'fxtwitter.com'
-            message_content = re.sub(pattern, r'https://fxtwitter.com/\2/status/\3', message_content)
+        # Replace 'twitter.com' or 'x.com' with 'fxtwitter.com'
+        message_content = re.sub(pattern, r'https://fxtwitter.com/\2/status/\3', message_content)
 
-            if pattern.search(message.content):
-                await message.channel.send(f"{message.author.display_name}: {message_content}")
-                await message.delete()
+        if pattern.search(message.content):
+            await message.channel.send(f"{message.author.display_name}: {message_content}", reference=message.reference)
+            await message.delete()
 
     @bot.tree.command(name="ping", description="Pong!")
     async def ping(interaction: discord.Interaction):
