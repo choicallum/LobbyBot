@@ -52,7 +52,7 @@ class WordleSolver:
         self.hints = Hints()
         with open(possible_guesses_filepath) as f:
             self.possible_guesses = [line.strip() for line in f]
-        self.valid_words = self.possible_guesses.copy()  # Initially all words are valid
+        self.valid_words = self.possible_guesses.copy()
         # Pre-compute character counts for all words to avoid repeated Counter() calls
         self.word_char_counts = {}
         for word in self.possible_guesses:
@@ -200,19 +200,30 @@ class WordleSolver:
 
         return scores
 
-import discord
+import discord, asyncio
 
 async def grade_wordle(interaction: discord.Interaction, guesses: str):
-    await interaction.response.defer()
-
     guesses_arr = [guess.strip().lower() for guess in guesses.split(',')]
+    for guess in guesses_arr:
+        if not guess.isalpha():
+            await interaction.response.send_message(
+                "Input must be a comma-separated list of the actual guesses you made. "
+                'For example, "bread, scout, hoist" would be valid input. '
+                "Please include both the opener and the answer.",
+                ephemeral=True
+            )
+            return
+
     solver = WordleSolver(
         True,
         guesses_arr[-1],
         guesses_arr[:-1],
-        Path(f'{RESOURCES_PATH}/wordle_valid_answers.txt')
+        Path(f"{RESOURCES_PATH}/wordle_valid_answers.txt")
     )
-    scores = solver.evaluate_guesses()
+
+    await interaction.response.defer()
+
+    scores = await asyncio.to_thread(solver.evaluate_guesses)
 
     embed = discord.Embed(title="Wordle Guess Evaluation", color=discord.Color.green())
     embed.add_field(
@@ -231,14 +242,11 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str):
             value=f"{percentage:.2f}% as good as the optimal guess(es) {optimal_spoiler}",
             inline=False
         )
+
     embed.add_field(
         name="Answer",
         value=f"||{guesses_arr[-1]}||",
         inline=False
     )
-    try:
-        await interaction.followup.send(embed=embed)
-    except Exception as e:
-        await interaction.followup.send(f"Error sending embed: {e}")
 
-
+    await interaction.followup.send(embed=embed)
