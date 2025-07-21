@@ -114,12 +114,14 @@ def run():
         await add_player_to_lobby(interaction, interaction.user, player, forced=True)
 
     @bot.tree.command(name="gradewordle", description="Grades how well you played Wordle (Hard Mode only)")
-    async def add(interaction: discord.Interaction, guesses: str):
+    async def gradewordle(interaction: discord.Interaction, guesses: str, answer: str = "", try_all_words: bool = False):
         """
         :param guesses: Comma separated guesses. (ex: meows, adieu, blend, where blend was today's wordle)
+        :param answer: The Wordle's answer. Use this if you failed today's wordle.
+        :param try_all_words: Whether or not to include more obscure words in the guess pool. May lead to extended processing times.
         """
         log_cmd_start(interaction, "gradewordle")
-        await grade_wordle(interaction, guesses)
+        await grade_wordle(interaction, guesses, answer, try_all_words)
         
     bot.run(DISCORD_API_SECRET, root_logger=True)
 
