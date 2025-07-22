@@ -6,6 +6,13 @@ from settings import RESOURCES_PATH
 import discord
 import logging
 
+GREEN, YELLOW, GRAY = "G", "Y", "B"
+emoji_map = {
+    GREEN: '🟩',
+    YELLOW: '🟨',
+    GRAY: '⬛'
+}
+
 logger = logging.getLogger(__name__)
 # Contains all the known hints
 # green: int -> char (spot -> char)
@@ -54,24 +61,27 @@ class Hints:
 # G = green, Y = yellow, B = black/gray
 # note: this assumes that wordles goes left to right on yellow giving (I.e. if there's one A in the word, and we guess 2, the first will be given yellow).
 def simulate_feedback(guess: str, target: str) -> str:
-    pattern = ['B'] * len(guess)
+    pattern = [GRAY] * len(guess)
     # used to determine if we should mark yellow or gray
     remaining = Counter(target)
 
     # mark greens
     for i, (g_char, t_char) in enumerate(zip(guess, target)):
         if g_char == t_char:
-            pattern[i] = 'G'
+            pattern[i] = GREEN
             remaining[g_char] -= 1
 
     # mark yellows
     for i, g_char in enumerate(guess):
-        if pattern[i] == 'B' and remaining[g_char] > 0:
-            pattern[i] = 'Y'
+        if pattern[i] == GRAY and remaining[g_char] > 0:
+            pattern[i] = YELLOW
             remaining[g_char] -= 1
 
     return ''.join(pattern)
-    
+
+def feedback_to_emojis(feedback: str) -> str:
+    return ''.join(emoji_map[c] for c in feedback)
+
 class WordleSolver:
     def __init__(self,
                  hard_mode: bool, 
@@ -209,10 +219,19 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
             )
             return
         
+    if len(guesses_arr) <= 1:
+        await interaction.response.send_message(
+                "Congratulations on getting the Wordle in 1! " \
+                "Unfortunately, there's nothing to analyze here...",
+                ephemeral=True
+            )
+        
     guess_filepath = "wordle_valid_guesses.txt" if try_all_words else "wordle_valid_answers.txt"
+    real_answer = guesses_arr[-1]
+    
     solver = WordleSolver(
         True,
-        guesses_arr[-1],
+        real_answer,
         guesses_arr[:-1],
         Path(f"{RESOURCES_PATH}/{guess_filepath}"),
         Path(f"{RESOURCES_PATH}/wordle_valid_answers.txt")
@@ -224,8 +243,8 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
 
     embed = discord.Embed(title="Wordle Guess Evaluation", color=discord.Color.green())
     embed.add_field(
-        name="Starter",
-        value=f"||{guesses_arr[0]}||",
+        name=f"Starter",
+        value=f"{feedback_to_emojis(simulate_feedback(guesses_arr[0], real_answer))} ||{guesses_arr[0]}||",
         inline=False
     )
 
@@ -235,8 +254,9 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
         optimal_list = ', '.join(optimal_words)
         optimal_spoiler = f"||{optimal_list}||"
         embed.add_field(
-            name=f"Guess {i}: {guess_spoiler}",
-            value=f"{percentage:.2f}% as good as the optimal guess(es) {optimal_spoiler}",
+            name=f"Guess {i}",
+            value=f"{feedback_to_emojis(simulate_feedback(guess_word, real_answer))} {guess_spoiler}\n" 
+                  f"{percentage:.2f}% as good as the optimal guess(es) {optimal_spoiler}",
             inline=False
         )
 

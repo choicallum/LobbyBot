@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 def log_cmd_start(interaction: discord.Interaction, name: str):
     logger.info(f"{interaction.user.name}({interaction.user.id}) started {name} command")
 
+async def bot_can_send(interaction: discord.Interaction) -> bool:
+    perms = interaction.channel.permissions_for(interaction.guild.me)
+    if not perms.send_messages or not perms.view_channel or not perms.manage_messages:
+        await interaction.response.send_message(
+            "I don’t have permission to talk in this channel.", ephemeral=True
+        )
+        return False
+    return True
+
 def run():
     intents = discord.Intents.default()
     intents.message_content = True
@@ -79,6 +88,8 @@ def run():
         :param lobby_size: Max number of players in the lobby.
         :param game: The game being played.
         """
+        if not await bot_can_send(interaction):
+            return
         log_cmd_start(interaction, "lobby")
         await makeLobby(interaction, time, lobby_size, game)
     
@@ -87,21 +98,29 @@ def run():
         """
         :param lobby_size: Max number of players in the lobby.
         """
+        if not await bot_can_send(interaction):
+            return
         log_cmd_start(interaction, "flexnow")
         await makeLobby(interaction, "now", lobby_size, "flex")
 
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
+        if not await bot_can_send(interaction):
+            return
         log_cmd_start(interaction, "close")
         await close_lobby(interaction.user.id, interaction)
         
     @bot.tree.command(name="show", description="Gives you a list of all the lobbies and lets you bump one of them")
     async def show(interaction: discord.Interaction):
+        if not await bot_can_send(interaction):
+            return
         log_cmd_start(interaction, "show")
         await show_lobbies(interaction)
 
     @bot.tree.command(name="bump", description="Bump your own (or someone else's) lobby.")
     async def bump(interaction: discord.Interaction, owner: discord.Member=None):
+        if not await bot_can_send(interaction):
+            return
         log_cmd_start(interaction, "bump")
         if owner == None:
             owner = interaction.user
@@ -110,6 +129,8 @@ def run():
     
     @bot.tree.command(name="forceadd", description="Force adds a user to your owned lobby.")
     async def add(interaction: discord.Interaction, player: discord.Member):
+        if not await bot_can_send(interaction):
+            return
         log_cmd_start(interaction, "forceadd")
         await add_player_to_lobby(interaction, interaction.user, player, forced=True)
 
