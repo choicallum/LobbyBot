@@ -1,3 +1,7 @@
+# Hello if you're here from my Resume link!
+# This is the backend for my Wordle Grader, currently accessible through LobbyBot
+# The plan is to create a basic frontend for this in the future -- but the backend logic is still here!
+
 from typing import List, Dict, Set, Tuple
 from pathlib import Path
 from collections import Counter, defaultdict
