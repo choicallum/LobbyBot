@@ -7,7 +7,7 @@ import datetime as dt
 
 from datetime import datetime, date
 from typing import Union, Dict, List
-from timezone import getTimeZone
+from timezones import get_time_zone
 from settings import BUMP_LOBBY_CHANNEL_ID
 from discord.ext import tasks
 
@@ -133,7 +133,7 @@ async def show_lobbies(interaction: discord.Interaction):
         await interaction.response.send_message("There are no currently active lobbies!", ephemeral=True)
         return
     
-    timezone = await getTimeZone(interaction)
+    timezone = await get_time_zone(interaction)
     if timezone == "":
         return
     

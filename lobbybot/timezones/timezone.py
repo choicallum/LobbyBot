@@ -5,7 +5,7 @@ from settings import USERS_PATH
 
 logger = logging.getLogger(__name__)
 
-async def getTimeZone(interaction: discord.Interaction) -> str:
+async def get_time_zone(interaction: discord.Interaction) -> str:
     user_file = Path(f'{USERS_PATH}/{interaction.user.id}.txt')
     if not user_file.exists():
         logger.info(f"Failed to find {interaction.user.id}'s timezone data file")
@@ -14,7 +14,7 @@ async def getTimeZone(interaction: discord.Interaction) -> str:
     with user_file.open() as f:
         return f.read()
 
-async def setTimeZone(interaction: discord.Interaction):
+async def set_time_zone(interaction: discord.Interaction):
     select = discord.ui.Select(
         placeholder="Please set your time zone.",
         options=[

@@ -7,7 +7,7 @@ from discord.ext import commands
 
 # src imports
 from lobby import close_lobby, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
-from timezone import setTimeZone
+from timezones import set_time_zone
 from settings import DISCORD_API_SECRET, VERSION
 from wordle_grader import grade_wordle
 
@@ -79,7 +79,7 @@ def run():
     @bot.tree.command(name="set", description="Set your time zone")
     async def set(interaction: discord.Interaction):
         log_cmd_start(interaction, "set")
-        await setTimeZone(interaction)
+        await set_time_zone(interaction)
 
     @bot.tree.command(name="lobby", description="Starts a new lobby")
     async def lobby(interaction: discord.Interaction, time: str, lobby_size: int = 5, game: str = "Valorant"):
