@@ -1,16 +1,18 @@
 from typing import Dict, Optional
 from .lobby import Lobby
-from .lobby_enums import LobbyAddResult, LobbyRemoveResult
 from discord import Member
-
+from datetime import datetime
 class LobbyManager:
     def __init__(self):
         self._lobbies: Dict[int, Lobby] = {} # owner id -> lobby
         self._id_counter = 0
     
-    def create_lobby(self, owner, time, max_players, game) -> Lobby:
-        """ Creates a lobby. """
-        lobby = Lobby(self._id_counter, owner, time, max_players, game)
+    def create_lobby(self, owner: Member, time: int, max_players: int, game: str) -> Lobby:
+        """ Creates a lobby. Returns None if owner already has a lobby. """
+        if owner.id in self._lobbies:
+            return None
+        
+        lobby = Lobby(self._id_counter, owner, time, max_players, game, int(datetime.now().timestamp()))
         self._lobbies[owner.id] = lobby
         self._id_counter += 1
         return lobby

@@ -5,12 +5,11 @@ import re
 
 from discord.ext import commands
 
-# src imports
-from lobby import close_lobby, makeLobby, show_lobbies, bump_lobby, add_player_to_lobby
-from timezones import set_time_zone
-from settings import DISCORD_API_SECRET, VERSION
-from wordle_grader import grade_wordle
-
+from .timezones import set_time_zone
+from lobbybot.settings import DISCORD_API_SECRET, VERSION
+from .wordle.wordle_grader import grade_wordle
+from .lobby import LobbyController
+from .images import get_img_store
 logger = logging.getLogger(__name__)
 
 def log_cmd_start(interaction: discord.Interaction, name: str):
@@ -26,6 +25,9 @@ async def bot_can_send(interaction: discord.Interaction) -> bool:
     return True
 
 def run():
+
+    lobby_controller = LobbyController()
+    image_store = get_img_store()
     intents = discord.Intents.default()
     intents.message_content = True
 
@@ -91,7 +93,7 @@ def run():
         if not await bot_can_send(interaction):
             return
         log_cmd_start(interaction, "lobby")
-        await makeLobby(interaction, time, lobby_size, game)
+        await lobby_controller.create_lobby(interaction, time, lobby_size, game)
     
     @bot.tree.command(name="flexnow", description="Starts a new flex lobby")
     async def flexnow(interaction: discord.Interaction, lobby_size: int = 5):
@@ -101,38 +103,38 @@ def run():
         if not await bot_can_send(interaction):
             return
         log_cmd_start(interaction, "flexnow")
-        await makeLobby(interaction, "now", lobby_size, "flex")
+        await lobby_controller.create_lobby(interaction, "now", lobby_size, "flex")
 
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):
         if not await bot_can_send(interaction):
             return
         log_cmd_start(interaction, "close")
-        await close_lobby(interaction.user.id, interaction)
+        await lobby_controller.handle_close_lobby(interaction)
         
-    @bot.tree.command(name="show", description="Gives you a list of all the lobbies and lets you bump one of them")
-    async def show(interaction: discord.Interaction):
-        if not await bot_can_send(interaction):
-            return
-        log_cmd_start(interaction, "show")
-        await show_lobbies(interaction)
+    # @bot.tree.command(name="show", description="Gives you a list of all the lobbies and lets you bump one of them")
+    # async def show(interaction: discord.Interaction):
+    #     if not await bot_can_send(interaction):
+    #         return
+    #     log_cmd_start(interaction, "show")
+    #     await show_lobbies(interaction)
 
-    @bot.tree.command(name="bump", description="Bump your own (or someone else's) lobby.")
-    async def bump(interaction: discord.Interaction, owner: discord.Member=None):
-        if not await bot_can_send(interaction):
-            return
-        log_cmd_start(interaction, "bump")
-        if owner == None:
-            owner = interaction.user
+    # @bot.tree.command(name="bump", description="Bump your own (or someone else's) lobby.")
+    # async def bump(interaction: discord.Interaction, owner: discord.Member=None):
+    #     if not await bot_can_send(interaction):
+    #         return
+    #     log_cmd_start(interaction, "bump")
+    #     if owner == None:
+    #         owner = interaction.user
 
-        await bump_lobby(interaction, owner)
+    #     await bump_lobby(interaction, owner)
     
     @bot.tree.command(name="forceadd", description="Force adds a user to your owned lobby.")
     async def add(interaction: discord.Interaction, player: discord.Member):
         if not await bot_can_send(interaction):
             return
         log_cmd_start(interaction, "forceadd")
-        await add_player_to_lobby(interaction, interaction.user, player, forced=True)
+        await lobby_controller.add_player_to_lobby(interaction, interaction.user, player, forced=True)
 
     @bot.tree.command(name="gradewordle", description="Grades how well you played Wordle (Hard Mode only)")
     async def gradewordle(interaction: discord.Interaction, guesses: str, answer: str = "", try_all_words: bool = False):
@@ -143,7 +145,19 @@ def run():
         """
         log_cmd_start(interaction, "gradewordle")
         await grade_wordle(interaction, guesses, answer, try_all_words)
-        
+    
+    @bot.tree.command(name="addimg", description="Add an image to the Lobby image pool")
+    async def add_lobby_image(interaction: discord.Interaction, url: str):
+        """
+        :param url: URL to an image or gif. Must be a direct link to the image (i.e. ends in .png, .jpg, .gif, etc.)
+        """
+        await interaction.response.defer(thinking=True)
+        success, err = image_store.add_img(url, f"{interaction.user.name} ({interaction.user.id})")
+        if success:
+            await interaction.followup.send("✅ Image added successfully!")
+        else:
+            await interaction.followup.send(f"❌ Failed to add image! {err}", ephemeral=True)
+
     bot.run(DISCORD_API_SECRET, root_logger=True)
 
 if __name__ == "__main__":

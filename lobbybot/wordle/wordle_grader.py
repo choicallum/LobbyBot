@@ -1,7 +1,7 @@
 from typing import List, Dict, Set, Tuple
 from pathlib import Path
 from collections import Counter, defaultdict
-from settings import RESOURCES_PATH
+from ..settings import RESOURCES_PATH
 
 import discord
 import logging

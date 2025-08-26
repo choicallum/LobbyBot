@@ -1,7 +1,12 @@
 class Player:
-    def __init__(self, id: int, forceAdded: bool = False):
+    def __init__(self, id: int, force_added: bool = False):
         self.id = id
-        self.forceAdded = forceAdded
+        self.force_added = force_added
+
+        self.ready = False
+    
+    def ready_up(self):
+        self.ready = True
     
     def __eq__(self, other):
         if isinstance(other, Player):
