@@ -54,7 +54,7 @@ class LobbyController:
         
         # automatically close lobby after 6 hours
         if parsed_time == ASAP_TIME:
-            timeout = 5  # 6 hours
+            timeout = 21600  # 6 hours
         else:
             timeout = parsed_time - int(datetime.now().timestamp()) + 21600
         
