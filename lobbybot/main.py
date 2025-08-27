@@ -146,7 +146,7 @@ def run():
         log_cmd_start(interaction, "gradewordle")
         await grade_wordle(interaction, guesses, answer, try_all_words)
     
-    @bot.tree.command(name="addimg", description="Add an image to the Lobby image pool")
+    @bot.tree.command(name="add_img", description="Add an image to the Lobby image pool")
     async def add_lobby_image(interaction: discord.Interaction, url: str):
         """
         :param url: URL to an image or gif. Must be a direct link to the image (i.e. ends in .png, .jpg, .gif, etc.)
@@ -157,6 +157,18 @@ def run():
             await interaction.followup.send("✅ Image added successfully!")
         else:
             await interaction.followup.send(f"❌ Failed to add image! {err}", ephemeral=True)
+
+    @bot.tree.command(name="remove_img", description="Remove an image to the Lobby image pool")
+    async def remove_lobby_image(interaction: discord.Interaction, url: str):
+        """
+        :param url: URL to an image or gif that has already been added to the pool.
+        """
+        await interaction.response.defer(thinking=True)
+        success = image_store.remove_img(url)
+        if success:
+            await interaction.followup.send("✅ Image removed successfully!")
+        else:
+            await interaction.followup.send(f"❌ Failed to remove image!", ephemeral=True)
 
     bot.run(DISCORD_API_SECRET, root_logger=True)
 

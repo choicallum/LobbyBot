@@ -13,13 +13,14 @@ from lobbybot.settings import BUMP_LOBBY_CHANNEL_ID
 import logging
 logger = logging.getLogger(__name__)
 
+
 class LobbyController:
     """Main controller for handling lobby operations"""
     
     def __init__(self):
         self.lobby_manager = LobbyManager() 
         self.lobby_to_view: dict[int, discord.ui.View] = {} # lobby id -> view
-        self.lobby_to_msg = {} # lobby id -> message
+        self.lobby_to_msg: dict[int, discord.Message] = {} # lobby id -> message NOTE: you must fetch the message from an interaction response so the webhook doesn't expire
         self.spam_tasks = {}
     
     async def create_lobby(self, interaction: discord.Interaction, time: str, 
@@ -300,12 +301,21 @@ class LobbyController:
             try:
                 old_msg = self.lobby_to_msg[lobby.id]
                 await old_msg.delete()
+            except discord.HTTPException as e:
+                if e.code == 50027:  # Invalid Webhook Token
+                    # Refetch as regular message again and delete
+                    logger.warning(f"Webhook expired for lobby message {old_msg.id}, refetching as regular message.")
+                    regular_msg = await old_msg.channel.fetch_message(old_msg.id)
+                    await regular_msg.delete()
+                else:
+                    logger.warning(f"Failed to delete old lobby message: {e}")
             except Exception as e:
                 logger.warning(f"Failed to delete old lobby message: {e}")
         
         await interaction.response.send_message(embed=embed, view=current_view)
-        response = await interaction.original_response()
-        self.lobby_to_msg[lobby.id] = response
+        sent = await interaction.original_response()
+        fetched = await sent.channel.fetch_message(sent.id)
+        self.lobby_to_msg[lobby.id] = fetched
     
     async def _handle_add_result(self, interaction: discord.Interaction, result: LobbyAddResult, is_filler: bool = False):
         """Handle the result of adding a player/filler"""

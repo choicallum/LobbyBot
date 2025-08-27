@@ -9,6 +9,7 @@ VERSION = "2025/08/26 v2"
 
 load_dotenv()
 DISCORD_API_SECRET = os.getenv("DISCORD_API_TOKEN")
+TENOR_API_KEY = os.getenv("TENOR_API_KEY")
 BASE_DIR = Path(__file__).parent
 USERS_PATH = BASE_DIR / os.getenv("USERS_PATH")
 LOG_PATH = BASE_DIR / os.getenv("LOG_PATH")

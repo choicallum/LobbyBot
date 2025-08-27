@@ -161,3 +161,4 @@ cython_debug/
 
 .vscode/
 **/users
+lobbybot/resources/lobby_imgs.json
