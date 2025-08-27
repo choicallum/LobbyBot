@@ -8,6 +8,8 @@ from typing import List, Optional, Tuple
 from dataclasses import dataclass
 from lobbybot.settings import TENOR_API_KEY
 from logging import getLogger
+import discord
+from datetime import datetime
 
 logger = getLogger(__name__)
 
@@ -15,8 +17,9 @@ logger = getLogger(__name__)
 class ImgEntry:
     """Represents an image entry in the store."""
     url: str
-    submitted_by: str
-    timestamp: float
+    submitted_by_name: str
+    submitted_by_id: int
+    timestamp: int
 
 class ImgStore:
     def __init__(self, path: Optional[str] = None):
@@ -57,7 +60,8 @@ class ImgStore:
                 data = [
                     {
                         "url": entry.url,
-                        "submitted_by": entry.submitted_by,
+                        "submitted_by_name": entry.submitted_by_name,
+                        "submitted_by_id": entry.submitted_by_id,
                         "timestamp": entry.timestamp
                     }
                     for entry in self.imgs
@@ -67,9 +71,9 @@ class ImgStore:
         except OSError as e:
             logger.error(f"Error saving image store: {e}")
 
-    def add_img(self, url: str, submitted_by: str) -> Tuple[bool, str]:
+    def add_img(self, url: str, submitted_by_name: str, submitted_by_id: int) -> Tuple[bool, str]:
         """Add an image to the store."""
-        logger.info(f"attempting to add url {url} submitted by {submitted_by}")
+        logger.info(f"attempting to add url {url} submitted by {submitted_by_name} ({submitted_by_id})")
 
         cleaned_url = self._clean_url(url)
         if not cleaned_url:
@@ -81,7 +85,7 @@ class ImgStore:
         if not self._validate_image(cleaned_url):
             return False, "Invalid image URL or image not accessible."
         
-        entry = ImgEntry(cleaned_url, submitted_by, time.time())
+        entry = ImgEntry(cleaned_url, submitted_by_name, submitted_by_id, int(time.time()))
         self.imgs.append(entry)
         self.save()
         logger.info(f"Successfully added image: {cleaned_url}")
@@ -201,6 +205,48 @@ class ImgStore:
         
         return False
 
+# View to display all images in a gallery format
+class ImgStoreView(discord.ui.View):
+    def __init__(self, img_store: ImgStore):
+        super().__init__(timeout=86400) # 24 hours
+        self.img_store = img_store
+        self.imgs = img_store.imgs
+        self.index = 0
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.primary, row=0)
+    async def left_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.index = (self.index - 1) % len(self.imgs)
+        await interaction.response.edit_message(embed=self.get_embed(interaction), view=self)
+        
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.primary, row=0)
+    async def right_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.index = (self.index + 1) % len(self.imgs)
+        await interaction.response.edit_message(embed=self.get_embed(interaction), view=self)
+
+    def get_embed(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            color=discord.Color.blue()
+        )
+
+        if not interaction.guild:
+            embed.description = "This command can only be used in a server."
+            return embed 
+
+        embed.set_author(
+            name=f"{interaction.guild.name}'s Gallery",
+            icon_url=interaction.guild.icon.url if interaction.guild.icon else None
+        )
+        
+        if not self.imgs:
+            embed.add_field(name="No images in gallery", value="Use `/add_img <url>` to add images.")
+            return embed
+        
+        img = self.imgs[self.index]
+        embed.description = (f"**📷 Added by <@{img.submitted_by_id}> on <t:{img.timestamp}:f>**")
+        embed.set_image(url=img.url)
+        embed.set_footer(text=f"{self.index+1}/{len(self.imgs)}  •  URL: {img.url}")
+        
+        return embed
 
 # singleton
 _img_store_instance: Optional[ImgStore] = None
@@ -210,3 +256,10 @@ def get_img_store() -> ImgStore:
     if _img_store_instance is None:
         _img_store_instance = ImgStore()
     return _img_store_instance
+
+def create_img_store_gallery(interaction: discord.Interaction):
+    ''' returns (embed, view) tuple for showing all images'''
+    img_store = get_img_store()
+    view = ImgStoreView(img_store)
+    embed = view.get_embed(interaction)
+    return embed, view

@@ -25,7 +25,7 @@ class BaseLobbyView(discord.ui.View):
     def create_lobby_embed(self) -> discord.Embed:
         """Creates a Discord embed for a view"""
         if self.lobby.state == LobbyState.ACTIVE:
-            scheduled_time = f"<t:{self.lobby.time}:t>" if self.lobby.time != ASAP_TIME else "ASAP"
+            # scheduled_time = f"<t:{self.lobby.time}:t>" if self.lobby.time != ASAP_TIME else "ASAP"
             started_time = f"<t:{self.lobby.started_at}:t>" if self.lobby.started_at else "N/A"
             time_display = f"Started at {started_time}"
         else:
@@ -54,12 +54,11 @@ class BaseLobbyView(discord.ui.View):
         )
 
         embed.set_author(
-            name=f"{self.lobby.owner.name}'s Lobby",
-            icon_url=self.lobby.owner.display_avatar.url 
+            name=f"{self.lobby.owner.name}'s {'Active ' if self.lobby.state == LobbyState.ACTIVE else ''}Lobby",
+            icon_url=self.lobby.owner.display_avatar.url
         )
 
-        embed.description = f"🕒 {time_display}"
-
+        embed.description = f"🕒 {time_display}"   
         if self.img:
             try:
                 embed.set_image(url=self.img)
