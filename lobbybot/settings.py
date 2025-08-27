@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 logger = logging.getLogger()
-VERSION = "2025/08/26 v2"
+VERSION = "2025/08/26 v5"
 
 load_dotenv()
 DISCORD_API_SECRET = os.getenv("DISCORD_API_TOKEN")
