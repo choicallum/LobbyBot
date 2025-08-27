@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from .lobby import Lobby
 from discord import Member
 from datetime import datetime
@@ -23,6 +23,10 @@ class LobbyManager:
             if lobby.id == lobby_id:
                 return lobby
         return None
+    
+    def get_all_lobbies(self) -> List[Lobby]:
+        """ Returns a list of all lobbies. """
+        return list(lobby for lobby in self._lobbies.values() if not lobby.is_completed())
 
     def get_lobby_by_owner(self, owner_id: int) -> Optional[Lobby]:
         """ Returns a lobby based on the owner's id. Returns None if there is no such lobby. """
@@ -35,3 +39,4 @@ class LobbyManager:
             del self._lobbies[owner_id]
             return True
         return False
+    

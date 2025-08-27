@@ -7,6 +7,7 @@ from lobbybot.lobby.views import (
     WaitingLobbyView, 
     ActiveLobbyView,
     ForceStartView,
+    LobbySelectView
 )
 from lobbybot.timezones import get_time_zone, parse_time_input, ASAP_TIME
 from lobbybot.settings import BUMP_LOBBY_CHANNEL_ID
@@ -34,6 +35,7 @@ class LobbyController:
         owner = interaction.user
         timezone = await get_time_zone(interaction.user.id)
         if timezone == "":
+            await interaction.response.send_message("Your timezone is not set yet! Run /set to register your timezone.", ephemeral=True)
             return
         
         # check if user already has a lobby
@@ -237,21 +239,21 @@ class LobbyController:
         
         await self._close_lobby_internal(lobby.owner.id, interaction)
     
-    # async def show_lobbies(self, interaction: discord.Interaction):
-    #     """Show all active lobbies in a dropdown"""
-    #     all_lobbies = [lobby for lobby in self.lobby_manager._lobbies.values() 
-    #                   if lobby._state != LobbyState.COMPLETED]
+    async def show_lobbies(self, interaction: discord.Interaction):
+        """Show all active lobbies in a dropdown"""
+        all_lobbies = self.lobby_manager.get_all_lobbies()
         
-    #     if not all_lobbies:
-    #         await interaction.response.send_message("There are no currently active lobbies!", ephemeral=True)
-    #         return
+        if not all_lobbies:
+            await interaction.response.send_message("There are no currently active lobbies!", ephemeral=True)
+            return
         
-    #     timezone = await get_time_zone(interaction)
-    #     if timezone == "":
-    #         return
+        timezone = await get_time_zone(interaction.user.id)
+        if timezone == "":
+            await interaction.response.send_message("Your timezone is not set yet! Run /set to register your timezone.", ephemeral=True)
+            return
         
-    #     view = LobbySelectView(all_lobbies, self, timezone)
-    #     await interaction.response.send_message(view=view, ephemeral=True)
+        view = LobbySelectView(120, timezone, all_lobbies, self)
+        await interaction.response.send_message(view=view, ephemeral=True)
     
     async def handle_show_specific_lobby(self, interaction: discord.Interaction, lobby_id: int):
         """Show a specific lobby"""
