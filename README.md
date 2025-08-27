@@ -31,7 +31,6 @@
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -45,28 +44,16 @@
 
 LobbyBot is a lightweight discord bot allowing users to plan lobbies for gaming or social events on discord. 
 
-It is NOT publically hosted as of now, but can easily be setup on a free trial of an EC2 AWS instance, or any other cloud setup (or even locally!).
+It is NOT publically hosted as of now, but can easily be setup on a free trial of an EC2 AWS instance, GCP Compute Engine Free Trial, or any other cloud setup (or even locally!).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- GETTING STARTED -->
 ### Prerequisites
 * Python 3.8 or higher [Download](https://www.python.org/downloads/)
-* discord.py
-
-  For Windows:
-  ```sh
-  py -3 -m pip install -U discord.py
-  ```
-  For Linux/Mac
-  ```sh
-  python3 -m pip install -U discord.py
-  ```
-* python-dotenv
-  ```sh
-  pip install python-dotenv
-  ```
-
+* From here, run `pip install -r /path/to/requirements.txt` to install all required libraries.
+* Get a free Tenor GIF API key at [https://tenor.com/gifapi/documentation#quickstart-setup](https://tenor.com/gifapi/documentation#quickstart-setup). Save this key for later.
+  
 ### Installation
 
 1. Get a free API Key at [https://discord.com/developers/applications](https://discord.com/developers/applications) by creating a new application.
@@ -81,9 +68,10 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
    ```sh
    git clone https://github.com/choicallum/LobbyBot.git
    ```
-4. Enter your API in `.env.example`
+4. Enter your Discord and Tenor API keys in `.env.example`
    ```py
-   DISCORD_API_TOKEN = 'ENTER YOUR API KEY'
+   DISCORD_API_TOKEN = 'ENTER YOUR DISCORD API KEY HERE'
+   TENOR_API_KEY = 'ENTER YOUR TENOR API KEY HERE'
    ```
 5. Create and enter the paths for the Users and Logs folders. By default, it should be:
    ```py
@@ -95,19 +83,6 @@ It is NOT publically hosted as of now, but can easily be setup on a free trial o
 7. Run main.py!
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
-<!-- ROADMAP -->
-## Roadmap
-
-- [ ] Add game integration (i.e. can create certain rank thresholds for lobbies that are checked when you sign up)
-
-See the [open issues](https://github.com/choicallum/LobbyBot/issues) for a  list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
 
 <!-- CONTRIBUTING -->
 ## Contributing

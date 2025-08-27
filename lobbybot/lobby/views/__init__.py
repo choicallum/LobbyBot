@@ -3,4 +3,4 @@ from .lobby_views import (
     ActiveLobbyView
 )
 from .force_start_view import ForceStartView
-
+from .lobby_select_view import LobbySelectView
