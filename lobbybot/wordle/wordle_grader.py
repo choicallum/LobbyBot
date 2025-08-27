@@ -241,7 +241,12 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
 
     scores = solver.evaluate_guesses()
 
-    embed = discord.Embed(title="Wordle Guess Evaluation", color=discord.Color.green())
+    total_score = sum(score[0] for score in scores)/len(scores) if scores else 100
+    embed = discord.Embed(title=f"Overall Score: {total_score:.2f}%", color=discord.Color.green())
+    embed.set_author(
+        name=f"{interaction.user.name}'s Wordle Analysis",
+        icon_url=interaction.user.display_avatar.url
+     )
     embed.add_field(
         name=f"Starter",
         value=f"{feedback_to_emojis(simulate_feedback(guesses_arr[0], real_answer))} ||{guesses_arr[0]}||",

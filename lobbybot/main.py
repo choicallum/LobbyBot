@@ -9,7 +9,7 @@ from .timezones import set_time_zone
 from lobbybot.settings import DISCORD_API_SECRET, VERSION
 from .wordle.wordle_grader import grade_wordle
 from .lobby import LobbyController
-from .images import get_img_store
+from .images import get_img_store, create_img_store_gallery
 logger = logging.getLogger(__name__)
 
 def log_cmd_start(interaction: discord.Interaction, name: str):
@@ -146,19 +146,19 @@ def run():
         log_cmd_start(interaction, "gradewordle")
         await grade_wordle(interaction, guesses, answer, try_all_words)
     
-    @bot.tree.command(name="add_img", description="Add an image to the Lobby image pool")
+    @bot.tree.command(name="add_image", description="Add an image to the Lobby image pool")
     async def add_lobby_image(interaction: discord.Interaction, url: str):
         """
         :param url: URL to an image or gif. Must be a direct link to the image (i.e. ends in .png, .jpg, .gif, etc.)
         """
         await interaction.response.defer(thinking=True)
-        success, err = image_store.add_img(url, f"{interaction.user.name} ({interaction.user.id})")
+        success, err = image_store.add_img(url, interaction.user.name, interaction.user.id)
         if success:
             await interaction.followup.send("✅ Image added successfully!")
         else:
             await interaction.followup.send(f"❌ Failed to add image! {err}", ephemeral=True)
 
-    @bot.tree.command(name="remove_img", description="Remove an image to the Lobby image pool")
+    @bot.tree.command(name="remove_image", description="Remove an image from the Lobby image pool")
     async def remove_lobby_image(interaction: discord.Interaction, url: str):
         """
         :param url: URL to an image or gif that has already been added to the pool.
@@ -169,6 +169,11 @@ def run():
             await interaction.followup.send("✅ Image removed successfully!")
         else:
             await interaction.followup.send(f"❌ Failed to remove image!", ephemeral=True)
+
+    @bot.tree.command(name="gallery", description="Shows all images in the Lobby image pool")
+    async def gallery(interaction: discord.Interaction):
+        embed, view = create_img_store_gallery(interaction)
+        await interaction.response.send_message(embed=embed, view=view)
 
     bot.run(DISCORD_API_SECRET, root_logger=True)
 
