@@ -134,12 +134,19 @@ def run():
 
         await lobby_controller.bump_lobby(interaction, owner)
     
-    @bot.tree.command(name="forceadd", description="Force adds a user to your owned lobby.")
+    @bot.tree.command(name="forceadd", description="Force adds a user to a lobby you're in")
     async def add(interaction: discord.Interaction, player: discord.Member):
         if not await bot_can_send(interaction):
             return
         log_cmd_start(interaction, "forceadd")
-        await lobby_controller.add_player_to_lobby(interaction, interaction.user, player, forced=True)
+        await lobby_controller.add_player_to_lobby(interaction, player, forced=True)
+
+    @bot.tree.command(name="forceremove", description="Force removes a user to a lobby you're in")
+    async def force_remove(interaction: discord.Interaction, player: discord.Member):
+        if not await bot_can_send(interaction):
+            return
+        log_cmd_start(interaction, "forceremove")
+        await lobby_controller.remove_player_from_lobby(interaction, interaction.user, player)
 
     @bot.tree.command(name="gradewordle", description="Grades how well you played Wordle (Hard Mode only)")
     async def gradewordle(interaction: discord.Interaction, guesses: str, answer: str = "", try_all_words: bool = False):

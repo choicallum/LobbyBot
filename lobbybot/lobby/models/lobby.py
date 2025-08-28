@@ -114,7 +114,7 @@ class Lobby:
             self._fillers.append(Player(player.id, forced))
             return LobbyAddResult.SUCCESS
 
-    def remove_player(self, player: discord.Member) -> LobbyRemoveResult:
+    def remove_participant(self, player: discord.Member) -> LobbyRemoveResult:
         """ Removes a player from the player or filler list. If the player leaving is the last player, the lobby will close. """
         if self._state == LobbyState.COMPLETED:
             return LobbyRemoveResult.LOBBY_COMPLETED
