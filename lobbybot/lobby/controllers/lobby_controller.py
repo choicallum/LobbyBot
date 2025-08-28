@@ -224,7 +224,7 @@ class LobbyController:
                            user: discord.Member, view: ActiveLobbyView):
         """Handle filling in to active lobby"""
         user_id = user.id
-        current_players = len(lobby._players)
+        current_players = len(lobby.get_players())
         strict_count = len(view.strict_ids)
         
         if user_id in view.strict_ids:

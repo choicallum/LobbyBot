@@ -18,7 +18,7 @@ class ForceStartView(discord.ui.View):
     def get_embed(self):
         embed = discord.Embed(
             title=f"Force Start Lobby {self.lobby.id}?",
-            description=f"{self.lobby.owner.mention} is requesting to force start the lobby with {len(self.lobby._players)}/{self.lobby.max_players} players.",
+            description=f"{self.lobby.owner.mention} is requesting to force start the lobby with {len(self.lobby.get_players())}/{self.lobby.max_players} players.",
             color=discord.Color.orange()
         )
         embed.set_footer(text=f"You have {int(self.timeout)} seconds to respond.")
