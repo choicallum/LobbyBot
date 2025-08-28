@@ -270,5 +270,7 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
         value=f"||{guesses_arr[-1]}||",
         inline=False
     )
+    
+    embed.set_footer(text="Try try_all_words=True to see more obscure guesses!")
 
     await interaction.followup.send(embed=embed)

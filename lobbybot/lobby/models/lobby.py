@@ -1,8 +1,10 @@
 from .player import Player
 from .lobby_enums import LobbyAddResult, LobbyRemoveResult, LobbyState, TRANSITIONS
-from typing import Tuple, List
+from typing import Tuple, List, TYPE_CHECKING
 import discord
 import time
+if TYPE_CHECKING:
+    from discord import VoiceState
 
 class Lobby:
     def __init__(self, id: int, owner: discord.Member, time: int, max_players: int, game: str, created_at: int):
@@ -24,6 +26,9 @@ class Lobby:
     @property
     def state(self) -> LobbyState:
         return self._state
+
+    def is_active(self) -> bool:
+        return self._state == LobbyState.ACTIVE
 
     def is_completed(self) -> bool:
         return self._state == LobbyState.COMPLETED
@@ -52,6 +57,29 @@ class Lobby:
         """ Returns if a user_id is in the lobby at all. """
         return self.playing_in_lobby(user_id) or any(player.id == user_id for player in self._fillers)
 
+    def edit_participant_voicestate(self, player_id: int, new_state: "VoiceState"):
+        participant = next((p for p in self._players if p == player_id), None)
+        if not participant:
+            participant = next((p for p in self._filler if p == player_id), None)
+
+        if participant:
+            participant.voice_state = new_state
+    
+    def participant_joined_voice(self, player_id: int):
+        participant = next((p for p in self._players if p == player_id), None)
+        if not participant:
+            participant = next((p for p in self._filler if p == player_id), None)
+
+        if participant:
+            participant.joined_voice = True
+
+    
+    def get_participants(self):
+        return self._players + self._fillers
+
+    def get_players(self):
+        return self._players
+        
     def edit_time(self, new_time: int) -> None:
         """ Edits the time of the lobby. """
         self.time = new_time
