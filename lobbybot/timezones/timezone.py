@@ -2,7 +2,7 @@ import discord
 import logging
 from pathlib import Path
 from ..settings import USERS_PATH
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pytz
 from .times import ASAP_TIME
 logger = logging.getLogger(__name__)
@@ -55,7 +55,6 @@ def write_timezone(id: int, timezone: str):
 async def parse_time_input(interaction: discord.Interaction, time: str, timezone: str):
     """Parse time input """
     if time.lower() in ["now", "asap"]:
-        start_time = datetime.now()
         return ASAP_TIME
         
     try:
@@ -69,14 +68,19 @@ async def parse_time_input(interaction: discord.Interaction, time: str, timezone
             ephemeral=True
         )
         return None
-        
-    today = date.today()
-    start_time = input_time.replace(year=today.year, month=today.month, day=today.day)
-    localized_time = pytz.timezone(timezone).localize(start_time)
-    utc_time = int(localized_time.timestamp())
-        
-    # If time is in the past, assume tomorrow
-    if utc_time < int(datetime.now().timestamp()):
-        utc_time += 86400  # Add 1 day
-        
+    
+    user_tz = pytz.timezone(timezone)
+    now_in_user_tz = datetime.now(user_tz)
+    
+    today = now_in_user_tz.date()
+    target_time = input_time.replace(year=today.year, month=today.month, day=today.day)
+    localized_target = user_tz.localize(target_time)
+    
+    # If the target time has already passed today (given a buffer), schedule for tomorrow
+    buffer = timedelta(minutes=30)
+    if localized_target <= now_in_user_tz - buffer:
+        localized_target += timedelta(days=1)
+    
+    utc_time = int(localized_target.timestamp())
+    
     return utc_time

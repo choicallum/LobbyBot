@@ -1,5 +1,6 @@
 import discord
 import asyncio
+from collections import defaultdict
 from datetime import datetime
 from typing import Optional
 from lobbybot.lobby.models import LobbyManager, Lobby, LobbyAddResult, LobbyRemoveResult, LobbyState
@@ -7,7 +8,8 @@ from lobbybot.lobby.views import (
     WaitingLobbyView, 
     ActiveLobbyView,
     ForceStartView,
-    LobbySelectView
+    LobbySelectView,
+    CloseConfirmationView
 )
 from lobbybot.timezones import get_time_zone, parse_time_input, ASAP_TIME
 from lobbybot.settings import BUMP_LOBBY_CHANNEL_ID
@@ -45,7 +47,7 @@ class LobbyController:
         
         # parse time input
         parsed_time = await parse_time_input(interaction, time, timezone)
-        if parsed_time is None:
+        if not parsed_time:
             return  # error message already sent in parse_time_input
         
         lobby = self.lobby_manager.create_lobby(
@@ -59,7 +61,7 @@ class LobbyController:
         if parsed_time == ASAP_TIME:
             timeout = 21600  # 6 hours
         else:
-            timeout = parsed_time - int(datetime.now().timestamp()) + 21600
+            timeout = parsed_time - int(datetime.now().timestamp()) + 7200 # 2 hours for listed time lobbies
         
         # create view and setup lobby
         view = WaitingLobbyView(timeout=timeout, lobby=lobby, controller=self)
@@ -70,10 +72,11 @@ class LobbyController:
             self._setup_spam_updates(lobby, interaction.channel)
         
         # send initial message
+
         await self._update_lobby_message(interaction, lobby, view)
         
         # setup auto-close
-        asyncio.create_task(self._auto_close_lobby(lobby, timeout))
+        asyncio.create_task(self._auto_close_lobby(lobby, timeout, LobbyState.WAITING))
     
     async def handle_join_lobby(self, interaction: discord.Interaction, lobby: Lobby, 
                                user: discord.Member, is_filler: bool = False):
@@ -129,11 +132,13 @@ class LobbyController:
             message_parts.extend([f"<@{player.id}>" for player in final_players])
             
             # update lobby to active state
-            new_view = ActiveLobbyView(timeout=21600, lobby=lobby, controller=self) # 6 hours until timeout for active lobby
+            timeout = 21600 # 6 hours until timeout for active lobby
+            new_view = ActiveLobbyView(timeout=timeout, lobby=lobby, controller=self)
             self.lobby_to_view[lobby.id] = new_view
             
             await interaction.channel.send(content=' '.join(message_parts))
             await self._update_lobby_message(interaction, lobby, new_view)
+            asyncio.create_task(self._auto_close_lobby(lobby, timeout, LobbyState.ACTIVE))
             return True
         else:
             # offer force start if there are not enough players
@@ -164,7 +169,7 @@ class LobbyController:
         return True
 
     async def handle_close_lobby(self, interaction: discord.Interaction, lobby: Lobby=None):
-        """Handle closing a lobby (owner only)"""
+        """Handle closing a lobby -- anyone who is not the owner is asked again to confirm """
         # if there's no explicit lobby passed in, get it by owner
 
         if lobby is None:
@@ -178,11 +183,25 @@ class LobbyController:
             return
         
         if interaction.user.id != lobby.owner.id:
-            await interaction.response.send_message("You are not the owner of this lobby! 😡", ephemeral=True)
+            close_confirm_view = CloseConfirmationView(60, None, interaction.user.id, lobby, self)
+            await interaction.response.send_message(
+                f"This is not your lobby <@{interaction.user.id}>! Are you sure you want to close it?", 
+                view=close_confirm_view)
+            close_confirm_view.msg = await interaction.original_response()
             return
         
         await self._close_lobby_internal(lobby.owner.id, interaction)
     
+    async def handle_close_confirmation(self, msg: discord.Message, user_id: int, interaction: discord.Interaction, lobby: Lobby, close: bool):
+        if user_id != interaction.user.id:
+            await interaction.response.send_message(f"This is not your interaction!", ephemeral=True)
+            return
+        
+        if close:
+            await self._close_lobby_internal(lobby.owner.id, interaction)
+        else:
+            await msg.delete() 
+
     async def handle_dropout_active(self, interaction: discord.Interaction, lobby: Lobby, 
                                    user: discord.Member, view: ActiveLobbyView):
         """Handle dropout lobby from active lobby"""
@@ -234,10 +253,22 @@ class LobbyController:
             return
         
         if not lobby.playing_in_lobby(interaction.user.id):
-            await interaction.response.send_message("You are not playing in this lobby!", ephemeral=True)
+            close_confirm_view = CloseConfirmationView(60, None, interaction.user.id, lobby, self)
+            await interaction.response.send_message(
+                f"This is not your lobby <@{interaction.user.id}>! Are you sure you want to close it?", 
+                view=close_confirm_view)
+            close_confirm_view.msg = await interaction.original_response()
             return
         
         await self._close_lobby_internal(lobby.owner.id, interaction)
+    
+    async def handle_show_specific_lobby(self, interaction: discord.Interaction, lobby_id: int, **kwargs):
+        """Show a specific lobby"""
+        lobby = self.lobby_manager.get_lobby_by_id(lobby_id)
+        if lobby:
+            await self._update_lobby_message(interaction, lobby)
+        else:
+            await interaction.response.send_message("Lobby not found!", ephemeral=True)
     
     async def show_lobbies(self, interaction: discord.Interaction):
         """Show all active lobbies in a dropdown"""
@@ -252,17 +283,9 @@ class LobbyController:
             await interaction.response.send_message("Your timezone is not set yet! Run /set to register your timezone.", ephemeral=True)
             return
         
-        view = LobbySelectView(120, timezone, all_lobbies, self)
+        view = LobbySelectView(120, timezone, all_lobbies, self, self.handle_show_specific_lobby)
         await interaction.response.send_message(view=view, ephemeral=True)
-    
-    async def handle_show_specific_lobby(self, interaction: discord.Interaction, lobby_id: int):
-        """Show a specific lobby"""
-        lobby = self.lobby_manager.get_lobby_by_id(lobby_id)
-        if lobby:
-            await self._update_lobby_message(interaction, lobby)
-        else:
-            await interaction.response.send_message("Lobby not found!", ephemeral=True)
-    
+
     async def bump_lobby(self, interaction: discord.Interaction, user: discord.Member):
         """Bump a user's lobby"""
         lobby = self.lobby_manager.get_lobby_by_owner(user.id)
@@ -272,22 +295,43 @@ class LobbyController:
         
         await self._update_lobby_message(interaction, lobby)
     
-    async def add_player_to_lobby(self, interaction: discord.Interaction, owner: discord.Member, 
+    async def add_player_to_lobby(self, interaction: discord.Interaction, player: discord.Member, 
                                  addee: discord.Member, forced: bool):
         """Force add a player to someone's lobby"""
-        lobby = self.lobby_manager.get_lobby_by_owner(owner.id)
-        if not lobby:
-            await interaction.response.send_message(f"{owner.name} did not have an active lobby 😔", ephemeral=True)
+        lobbies = self.lobby_manager.get_lobbies_by_participant(player.id)
+        if not lobbies:
+            await interaction.response.send_message(f"{player.name} was not a part of any lobbies 😔", ephemeral=True)
             return
-        
-        result = lobby.add_player(addee, forced=forced)
-        if result == LobbyAddResult.SUCCESS:
-            await self._update_lobby_message(interaction, lobby)
+        elif len(lobbies) == 1:
+            result = lobbies[0].add_player(addee, forced=forced)
+            if result == LobbyAddResult.SUCCESS:
+                await self._update_lobby_message(interaction, lobbies[0])
+            else:
+                await self._handle_add_result(interaction, result)
         else:
-            await self._handle_add_result(interaction, result)
-    
+            timezone = await get_time_zone(interaction.user.id)
+            if timezone == "":
+                await interaction.response.send_message("Your timezone is not set yet! Run /set to register your timezone.", ephemeral=True)
+                return
+            
+            view = LobbySelectView(120, timezone, lobbies, self, self.handle_force_add_to_specific_lobby, player=addee)
+            await interaction.response.send_message(view=view, ephemeral=True)
+
+    async def handle_force_add_to_specific_lobby(self, interaction: discord.Interaction, lobby_id: int, **kwargs):
+        """Force-add a player to a specific lobby. Expects 'player': discord.Member in kwargs. """
+        lobby = self.lobby_manager.get_lobby_by_id(lobby_id)
+        if lobby:
+            result = lobby.add_player(kwargs.get('player'), True)
+            if result == LobbyAddResult.SUCCESS:
+                await self._update_lobby_message(interaction, lobby)
+            else:
+                await self._handle_add_result(interaction, result)
+        else:
+            await interaction.response.send_message("Lobby not found!", ephemeral=True)
+
     async def _update_lobby_message(self, interaction: discord.Interaction, lobby: Lobby, view=None):
         """Update the lobby message"""
+        await interaction.response.defer()
         current_view = view or self.lobby_to_view[lobby.id]
 
         # disable play button if lobby is full
@@ -314,8 +358,7 @@ class LobbyController:
             except Exception as e:
                 logger.warning(f"Failed to delete old lobby message: {e}")
         
-        await interaction.response.send_message(embed=embed, view=current_view)
-        sent = await interaction.original_response()
+        sent = await interaction.followup.send(embed=embed, view=current_view)
         fetched = await sent.channel.fetch_message(sent.id)
         self.lobby_to_msg[lobby.id] = fetched
     
@@ -323,7 +366,7 @@ class LobbyController:
         """Handle the result of adding a player/filler"""
         if result == LobbyAddResult.ALREADY_IN_LOBBY:
             action = "filling" if is_filler else "playing"
-            await interaction.response.send_message(f"You're already {action} in this lobby! 😡", ephemeral=True)
+            await interaction.response.send_message(f"This player is already {action} in this lobby! 😡", ephemeral=True)
         elif result == LobbyAddResult.LOBBY_FULL:
             await interaction.response.send_message("The lobby is already full 😞", ephemeral=True)
         elif result == LobbyAddResult.LOBBY_COMPLETED:
@@ -399,10 +442,53 @@ class LobbyController:
         task = asyncio.create_task(spam_update_task())
         self.spam_tasks[lobby.owner.id] = task
     
-    async def _auto_close_lobby(self, lobby: Lobby, timeout: int):
+    async def _auto_close_lobby(self, lobby: Lobby, timeout: int, curr_lobby_state: LobbyState):
         """Auto-close lobby after timeout"""
         await asyncio.sleep(timeout)
-        if lobby._state != LobbyState.COMPLETED:
+        if curr_lobby_state != lobby.state:
+            return 
+        
+        if lobby.state != LobbyState.COMPLETED:
             logger.info(f"Auto-closing lobby {lobby.id} due to timeout.")
-            await self.lobby_to_msg[lobby.id].channel.send(f"{lobby.owner.display_name}'s lobby timing out. Closing lobby.")
+            msg = f"{lobby.owner.display_name}'s lobby timing out. Closing lobby." if lobby.state != LobbyState.ACTIVE else \
+                f"{lobby.owner.display_name}'s's lobby timing out. You've been playing for 6 hours. Touch some grass. 🌳"
+            await self.lobby_to_msg[lobby.id].channel.send(msg)
             await self._close_lobby_internal(lobby.owner.id)
+
+    async def handle_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+        active_lobbies = self.lobby_manager.get_lobbies_by_participant(member.id, active=True)
+        if not active_lobbies:
+            return
+        
+        for lobby in active_lobbies:
+            lobby.edit_participant_voicestate(member.id, after)
+            if after.channel:
+                lobby.participant_joined_voice(member.id)
+            
+            # if the lobby hasn't become 'voice active' yet (i.e. not everyone, at some point in time, has joined voice), then don't check
+            if not all(player.joined_voice for player in lobby.get_players()):
+                continue
+
+            if after.channel == None: # meaning no longer connected to a channel
+                channel_to_participant_count = defaultdict(int)
+                
+                participants = lobby.get_participants()
+                for participant in participants:
+                    if participant.voice_state.channel:
+                        channel_to_participant_count[participant.voice_state.channel.id] += 1
+                
+                # if current players is low, make it so everyone has to leave to close the lobby
+                threshold = lobby.max_players * 0.75 if len(lobby.get_players()) > 3 else 1
+                still_active = False
+                for num_participants in channel_to_participant_count.values():
+                    if num_participants >= threshold:
+                        still_active = True
+                
+                # otherwise, threshold not met in any channel, close lobby.
+                if not still_active:
+                    logger.info(f"Auto-closing lobby {lobby.id} due to participants not being in voice.")
+                    logger.info(channel_to_participant_count)
+                    logger.info(lobby)
+                    
+                    await self.lobby_to_msg[lobby.id].channel.send(f"{lobby.owner.display_name}'s lobby is closing because some people left voice! 🙀")
+                    await self._close_lobby_internal(lobby.owner.id)

@@ -2,6 +2,7 @@ from typing import Dict, Optional, List
 from .lobby import Lobby
 from discord import Member
 from datetime import datetime
+from .lobby_enums import LobbyState
 class LobbyManager:
     def __init__(self):
         self._lobbies: Dict[int, Lobby] = {} # owner id -> lobby
@@ -31,6 +32,16 @@ class LobbyManager:
     def get_lobby_by_owner(self, owner_id: int) -> Optional[Lobby]:
         """ Returns a lobby based on the owner's id. Returns None if there is no such lobby. """
         return self._lobbies.get(owner_id)
+    
+    def get_lobbies_by_participant(self, player_id: int, active: bool = False) -> List[Lobby]:
+        """ 
+        Returns a list of lobbies that include player_id as a player or filler.
+        If active = True, only returns lobbies that are LobbyState.ACTIVE
+        """
+        if active:
+            return [lobby for lobby in self._lobbies.values() if lobby.in_lobby(player_id) and lobby.is_active()]
+        else:
+            return [lobby for lobby in self._lobbies.values() if lobby.in_lobby(player_id)]
     
     def close_lobby(self, owner_id: int) -> bool:
         """ Closes a lobby based on the owner's id. Returns True if successful, and False otherwise. """

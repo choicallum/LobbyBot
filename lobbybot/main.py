@@ -30,6 +30,8 @@ def run():
     image_store = get_img_store()
     intents = discord.Intents.default()
     intents.message_content = True
+    intents.voice_states = True
+    intents.members = True
 
     bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -44,7 +46,6 @@ def run():
         logger.info("synced!")
         logger.info("Bot is online!")
 
-    # bump messages in gundan_lobby
     @bot.event
     async def on_message(message: discord.Message):
         if message.author.bot:
@@ -61,6 +62,10 @@ def run():
         if pattern.search(message.content):
             await message.channel.send(f"{message.author.display_name}: {message_content}", reference=message.reference)
             await message.delete()
+
+    @bot.event
+    async def on_voice_state_update(member, before, after):
+        await lobby_controller.handle_voice_state_update(member, before, after)
 
     @bot.tree.command(name="ping", description="Pong!")
     async def ping(interaction: discord.Interaction):

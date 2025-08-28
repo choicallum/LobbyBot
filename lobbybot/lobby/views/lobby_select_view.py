@@ -10,10 +10,12 @@ if TYPE_CHECKING:
     from lobbybot.lobby.controllers import LobbyController
 
 class LobbySelectView(discord.ui.View):
-    def __init__(self, timeout: int, timezone: str, lobbies: List[Lobby], controller: "LobbyController"):
+    """ Takes an on_select function, with signature async(self: LobbyController, interaction: discord.Interaction, lobby_id: int, **kwargs) """
+    def __init__(self, timeout: int, timezone: str, lobbies: List[Lobby], controller: "LobbyController", on_select, **kwargs):
         super().__init__(timeout=timeout)
         self.lobbies = lobbies
         self.controller = controller
+        self.extra_args = kwargs
 
         options = []
         for lobby in self.lobbies:
@@ -31,5 +33,5 @@ class LobbySelectView(discord.ui.View):
 
         async def select_callback(interaction: discord.Interaction):
             lobby_id = int(select.values[0])
-            await self.controller.handle_show_specific_lobby(interaction, lobby_id)
+            await on_select(interaction, lobby_id, **self.extra_args)
         select.callback = select_callback
