@@ -102,7 +102,7 @@ class LobbyController:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
             return
         
-        self._handle_participant_dropout(interaction, lobby, user, )
+        await self._handle_participant_dropout(interaction, lobby, user, )
     
     async def handle_start_lobby(self, interaction: discord.Interaction, lobby: Lobby, forced: bool) -> bool:
         """Handle starting a lobby"""
@@ -202,7 +202,7 @@ class LobbyController:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
             return
     
-        self._handle_participant_dropout(interaction, lobby, user)
+        await self._handle_participant_dropout(interaction, lobby, user)
     
     async def handle_fill_in(self, interaction: discord.Interaction, lobby: Lobby, 
                            user: discord.Member, view: ActiveLobbyView):
@@ -321,7 +321,7 @@ class LobbyController:
             await interaction.response.send_message(f"{player.name} was not a part of any lobbies 😔", ephemeral=True)
             return
         elif len(lobbies) == 1:
-            self._handle_participant_dropout(interaction, lobbies[0], removee) 
+            await self._handle_participant_dropout(interaction, lobbies[0], removee) 
         else:
             timezone = await get_time_zone(interaction.user.id)
             if timezone == "":
@@ -336,7 +336,7 @@ class LobbyController:
         lobby = self.lobby_manager.get_lobby_by_id(lobby_id)
         if lobby:
             removee = kwargs.get('player')
-            self._handle_participant_dropout(interaction, lobby, removee)
+            await self._handle_participant_dropout(interaction, lobby, removee)
         else:
             await interaction.response.send_message("Lobby not found!", ephemeral=True)
 
@@ -394,7 +394,7 @@ class LobbyController:
         result = lobby.remove_participant(participant)
         if result == LobbyRemoveResult.SUCCESS_PLAYER:
             await self._update_lobby_message(interaction, lobby)
-            if lobby.sate == LobbyState.ACTIVE:
+            if lobby.state == LobbyState.ACTIVE:
                 # handle when a player drops out of an active lobby
                 if not lobby._fillers:
                     await self._update_lobby_message(interaction, lobby)

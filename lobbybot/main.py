@@ -146,7 +146,7 @@ def run():
         if not await bot_can_send(interaction):
             return
         log_cmd_start(interaction, "forceremove")
-        await lobby_controller.remove_player_from_lobby(interaction, interaction.user, player)
+        await lobby_controller.remove_participant_from_lobby(interaction, player)
 
     @bot.tree.command(name="gradewordle", description="Grades how well you played Wordle (Hard Mode only)")
     async def gradewordle(interaction: discord.Interaction, guesses: str, answer: str = "", try_all_words: bool = False):
