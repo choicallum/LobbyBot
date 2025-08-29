@@ -138,14 +138,15 @@ class LobbyController:
             for player in final_players:
                 # get_member is a cache call -- however voice data is still kept up to date. If not in cache, we make an API call.
                 updated_player_info = interaction.guild.get_member(player.id)
-                if not updated_player_info:
+                if not updated_player_info.voice:
                     try:
                         updated_player_info = await interaction.guild.fetch_member(player.id)
                     except discord.NotFound:
                         logger.info(f"failed to fetch {player.id} when starting a lobby")
                         continue
+                # if someone is in another server, updated_player_info.voice is None
                 player.voice_state = updated_player_info.voice
-                player.joined_voice = updated_player_info.voice.channel is not None
+                player.joined_voice = updated_player_info.voice and updated_player_info.voice.channel is not None
             return True
         else:
             # offer force start if there are not enough players

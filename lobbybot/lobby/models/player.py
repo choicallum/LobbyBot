@@ -1,13 +1,14 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from discord import VoiceState
+
 
 class Player:
     def __init__(self, id: int, force_added: bool = False, voice_state: "VoiceState" = None):
         self.id = id
         self.force_added = force_added
 
-        self.voice_state: "VoiceState" = voice_state
+        self.voice_state: Optional["VoiceState"] = voice_state
         self.joined_voice: bool = False
         self.ready = False
     
