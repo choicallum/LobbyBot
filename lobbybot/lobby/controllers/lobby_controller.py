@@ -102,13 +102,7 @@ class LobbyController:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
             return
         
-        result = lobby.remove_player(user)
-        if result in [LobbyRemoveResult.SUCCESS_PLAYER, LobbyRemoveResult.SUCCESS_FILLER]:
-            await self._update_lobby_message(interaction, lobby)
-        elif result == LobbyRemoveResult.LOBBY_EMPTY:
-            await self._close_lobby_internal(lobby.owner.id, interaction)
-        else:
-            await interaction.response.send_message("You weren't in this lobby! 😡", ephemeral=True)
+        await self._handle_participant_dropout(interaction, lobby, user, )
     
     async def handle_start_lobby(self, interaction: discord.Interaction, lobby: Lobby, forced: bool) -> bool:
         """Handle starting a lobby"""
@@ -139,6 +133,20 @@ class LobbyController:
             await interaction.channel.send(content=' '.join(message_parts))
             await self._update_lobby_message(interaction, lobby, new_view)
             asyncio.create_task(self._auto_close_lobby(lobby, timeout, LobbyState.ACTIVE))
+
+            # update every player's voice state as the baseline now that the lobby is active
+            for player in final_players:
+                # get_member is a cache call -- however voice data is still kept up to date. If not in cache, we make an API call.
+                updated_player_info = interaction.guild.get_member(player.id)
+                if not updated_player_info.voice:
+                    try:
+                        updated_player_info = await interaction.guild.fetch_member(player.id)
+                    except discord.NotFound:
+                        logger.info(f"failed to fetch {player.id} when starting a lobby")
+                        continue
+                # if someone is in another server, updated_player_info.voice is None
+                player.voice_state = updated_player_info.voice
+                player.joined_voice = updated_player_info.voice and updated_player_info.voice.channel is not None
             return True
         else:
             # offer force start if there are not enough players
@@ -202,23 +210,13 @@ class LobbyController:
         else:
             await msg.delete() 
 
-    async def handle_dropout_active(self, interaction: discord.Interaction, lobby: Lobby, 
-                                   user: discord.Member, view: ActiveLobbyView):
+    async def handle_dropout_active(self, interaction: discord.Interaction, lobby: Lobby, user: discord.Member):
         """Handle dropout lobby from active lobby"""
         if lobby.is_completed():
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
             return
     
-        # Handle regular dropout
-        result = lobby.remove_player(user)
-        if result == LobbyRemoveResult.SUCCESS_PLAYER:
-            await self._handle_player_dropout(interaction, lobby, view)
-        elif result == LobbyRemoveResult.SUCCESS_FILLER:
-            await self._update_lobby_message(interaction, lobby)
-        elif result == LobbyRemoveResult.LOBBY_EMPTY:
-            await self._close_lobby_internal(lobby.owner.id, interaction)
-        else:
-            await interaction.response.send_message("You weren't playing or filling in this lobby! 😡", ephemeral=True)
+        await self._handle_participant_dropout(interaction, lobby, user)
     
     async def handle_fill_in(self, interaction: discord.Interaction, lobby: Lobby, 
                            user: discord.Member, view: ActiveLobbyView):
@@ -295,9 +293,9 @@ class LobbyController:
         
         await self._update_lobby_message(interaction, lobby)
     
-    async def add_player_to_lobby(self, interaction: discord.Interaction, player: discord.Member, 
-                                 addee: discord.Member, forced: bool):
+    async def add_player_to_lobby(self, interaction: discord.Interaction, addee: discord.Member, forced: bool):
         """Force add a player to someone's lobby"""
+        player = interaction.user
         lobbies = self.lobby_manager.get_lobbies_by_participant(player.id)
         if not lobbies:
             await interaction.response.send_message(f"{player.name} was not a part of any lobbies 😔", ephemeral=True)
@@ -316,7 +314,7 @@ class LobbyController:
             
             view = LobbySelectView(120, timezone, lobbies, self, self.handle_force_add_to_specific_lobby, player=addee)
             await interaction.response.send_message(view=view, ephemeral=True)
-
+                
     async def handle_force_add_to_specific_lobby(self, interaction: discord.Interaction, lobby_id: int, **kwargs):
         """Force-add a player to a specific lobby. Expects 'player': discord.Member in kwargs. """
         lobby = self.lobby_manager.get_lobby_by_id(lobby_id)
@@ -326,6 +324,35 @@ class LobbyController:
                 await self._update_lobby_message(interaction, lobby)
             else:
                 await self._handle_add_result(interaction, result)
+        else:
+            await interaction.response.send_message("Lobby not found!", ephemeral=True)
+
+    async def remove_participant_from_lobby(self, interaction: discord.Interaction, removee: discord.Member):
+        """Force remove a player to someone's lobby"""
+        player = interaction.user
+        lobbies = self.lobby_manager.get_lobbies_by_participant(player.id)
+        if not lobbies:
+            await interaction.response.send_message(f"{player.name} was not a part of any lobbies 😔", ephemeral=True)
+            return
+        elif len(lobbies) == 1:
+            await self._handle_participant_dropout(interaction, lobbies[0], removee) 
+        else:
+            timezone = await get_time_zone(interaction.user.id)
+            if timezone == "":
+                await interaction.response.send_message("Your timezone is not set yet! Run /set to register your timezone.", ephemeral=True)
+                return
+            
+            view = LobbySelectView(120, timezone, lobbies, self, self.handle_force_remove_from_specific_lobby, player=removee)
+            await interaction.response.send_message(view=view, ephemeral=True)
+        
+        await interaction.followup.send(f"{interaction.user.name} has forcefully removed {removee.name} from this lobby!")
+
+    async def handle_force_remove_from_specific_lobby(self, interaction: discord.Interaction, lobby_id: int, **kwargs):
+        """Force-add a player to a specific lobby. Expects 'player': discord.Member in kwargs. """
+        lobby = self.lobby_manager.get_lobby_by_id(lobby_id)
+        if lobby:
+            removee = kwargs.get('player')
+            await self._handle_participant_dropout(interaction, lobby, removee)
         else:
             await interaction.response.send_message("Lobby not found!", ephemeral=True)
 
@@ -371,28 +398,48 @@ class LobbyController:
             await interaction.response.send_message("The lobby is already full 😞", ephemeral=True)
         elif result == LobbyAddResult.LOBBY_COMPLETED:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
-    
-    async def _handle_player_dropout(self, interaction: discord.Interaction, lobby: Lobby, view: ActiveLobbyView):
-        """Handle when a player drops out of an active lobby"""
-        if not lobby._fillers:
+
+    async def _handle_participant_dropout(self, interaction: discord.Interaction, lobby: Lobby, participant: discord.Member):
+        try:
+            view = self.lobby_to_view[lobby.id]
+        except Exception as e:
+            logger.error(f"failed to find a view while removing a player: {e}")
+            interaction.response.send_message("Error occurred while removing a player.")
+            return
+        
+        result = lobby.remove_participant(participant)
+        if result == LobbyRemoveResult.SUCCESS_PLAYER:
             await self._update_lobby_message(interaction, lobby)
-            await self.lobby_to_msg[lobby.id].channel.send("There are no fillers! This lobby needs fillers! 🐀🐁")
-        else:
-            # Invite first filler
-            filler = lobby._fillers[0]
+            if lobby.state == LobbyState.ACTIVE:
+                # handle when a player drops out of an active lobby
+                if not lobby._fillers:
+                    await self._update_lobby_message(interaction, lobby)
+                    await self.lobby_to_msg[lobby.id].channel.send("There are no fillers! This lobby needs fillers! 🐀🐁")
+                else:
+                    # Invite first filler
+                    filler = lobby._fillers[0]
+                    await self._update_lobby_message(interaction, lobby)
+                    await self.lobby_to_msg[lobby.id].channel.send(f"<@{filler.id}>, you are invited to join the lobby! Please click 'Fill In!' within 5 minutes. Press Drop Out to decline.")
+                    # view.strict_ids.append(filler.id)
+                    # asyncio.create_task(self._wait_for_filler_response(filler.id, view, lobby)
+        elif result == LobbyRemoveResult.SUCCESS_FILLER:
             await self._update_lobby_message(interaction, lobby)
-            await self.lobby_to_msg[lobby.id].channel.send(f"<@{filler.id}>, you are invited to join the lobby! Please click 'Fill In!' within 5 minutes. Press Drop Out to decline.")
-            view.strict_ids.append(filler.id)
-            asyncio.create_task(self._wait_for_filler_response(filler.id, view, lobby))
-    
-    async def _wait_for_filler_response(self, filler_id: int, view: ActiveLobbyView, lobby: Lobby):
-        """Wait for filler to respond to invitation"""
-        await asyncio.sleep(300)  # 5 minutes
-        if filler_id in view.strict_ids:
-            view.strict_ids.remove(filler_id)
-            message_parts = [f"<@{filler_id}> declined their spot. Anyone is free to join."]
-            message_parts.extend([f"<@{filler.id}>" for filler in lobby._fillers])
-            await self.lobby_to_msg[lobby.id].channel.send(' '.join(message_parts))
+        elif result == LobbyRemoveResult.LOBBY_EMPTY:
+            await self._close_lobby_internal(lobby.owner.id, interaction)
+            return
+        elif result == LobbyRemoveResult.NOT_IN_LOBBY:
+            await interaction.response.send_message("This player was not in the lobby! 😡", ephemeral=True)
+            return
+            
+
+    # async def _wait_for_filler_response(self, filler_id: int, view: ActiveLobbyView, lobby: Lobby):
+    #     """Wait for filler to respond to invitation"""
+    #     await asyncio.sleep(300)  # 5 minutes
+    #     if filler_id in view.strict_ids:
+    #         view.strict_ids.remove(filler_id)
+    #         message_parts = [f"<@{filler_id}> declined their spot. Anyone is free to join."]
+    #         message_parts.extend([f"<@{filler.id}>" for filler in lobby._fillers])
+    #         await self.lobby_to_msg[lobby.id].channel.send(' '.join(message_parts))
     
     async def _close_lobby_internal(self, owner_id: int, interaction: Optional[discord.Interaction] = None):
         """Internal method to close a lobby"""
@@ -478,7 +525,8 @@ class LobbyController:
                         channel_to_participant_count[participant.voice_state.channel.id] += 1
                 
                 # if current players is low, make it so everyone has to leave to close the lobby
-                threshold = lobby.max_players * 0.75 if len(lobby.get_players()) > 3 else 1
+                num_curr_players = len(lobby.get_players())
+                threshold = num_curr_players * 0.75 if num_curr_players > 3 else 1
                 still_active = False
                 for num_participants in channel_to_participant_count.values():
                     if num_participants >= threshold:

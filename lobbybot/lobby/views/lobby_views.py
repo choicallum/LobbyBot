@@ -126,7 +126,7 @@ class ActiveLobbyView(BaseLobbyView):
     @discord.ui.button(label="Leave Lobby", style=discord.ButtonStyle.red, row=0)
     async def dropout_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.log_button(interaction, "leave_active")
-        await self.controller.handle_dropout_active(interaction, self.lobby, interaction.user, self)
+        await self.controller.handle_dropout_active(interaction, self.lobby, interaction.user)
 
     @discord.ui.button(label="Close Lobby", style=discord.ButtonStyle.red, row=1)
     async def end_button(self, interaction: discord.Interaction, button: discord.ui.Button):
