@@ -128,16 +128,24 @@ class LobbyController:
         
         if success:
             # notify players
-            message_parts = ["Your game is ready!\n"]
-            message_parts.extend([f"<@{player.id}>" for player in final_players])
+            message_parts = [f"<@{player.id}>" for player in final_players]
+
+            embed = make_lobby_ready_embed(lobby)
+            for player in final_players:
+                try:
+                    user = interaction.client.get_user(player.id) or await interaction.client.fetch_user(player.id)
+                    await user.send(embed=embed)
+                except Exception as e:
+                    logger.exception(f"Unexpected error while DMing user {player.id} -- {e}")
             
             # update lobby to active state
             timeout = 21600 # 6 hours until timeout for active lobby
             new_view = ActiveLobbyView(timeout=timeout, lobby=lobby, controller=self)
             self.lobby_to_view[lobby.id] = new_view
             
-            await interaction.channel.send(content=' '.join(message_parts))
+            await interaction.channel.send(content=' '.join(message_parts), embed=embed)
             await self._update_lobby_message(interaction, lobby, new_view)
+            # create new auto close task for the active lobby view
             asyncio.create_task(self._auto_close_lobby(lobby, timeout, LobbyState.ACTIVE))
             return True
         else:
