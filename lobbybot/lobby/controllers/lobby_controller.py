@@ -144,6 +144,8 @@ class LobbyController:
                     except discord.NotFound:
                         logger.info(f"failed to fetch {player.id} when starting a lobby")
                         continue
+                player.voice_state = updated_player_info.voice
+                player.joined_voice = updated_player_info.voice.channel is not None
             return True
         else:
             # offer force start if there are not enough players
@@ -341,6 +343,8 @@ class LobbyController:
             
             view = LobbySelectView(120, timezone, lobbies, self, self.handle_force_remove_from_specific_lobby, player=removee)
             await interaction.response.send_message(view=view, ephemeral=True)
+        
+        await interaction.followup.send(f"{interaction.user.name} has forcefully removed {removee.name} from this lobby!")
 
     async def handle_force_remove_from_specific_lobby(self, interaction: discord.Interaction, lobby_id: int, **kwargs):
         """Force-add a player to a specific lobby. Expects 'player': discord.Member in kwargs. """
