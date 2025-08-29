@@ -133,6 +133,17 @@ class LobbyController:
             await interaction.channel.send(content=' '.join(message_parts))
             await self._update_lobby_message(interaction, lobby, new_view)
             asyncio.create_task(self._auto_close_lobby(lobby, timeout, LobbyState.ACTIVE))
+
+            # update every player's voice state as the baseline now that the lobby is active
+            for player in final_players:
+                # get_member is a cache call -- however voice data is still kept up to date. If not in cache, we make an API call.
+                updated_player_info = interaction.guild.get_member(player.id)
+                if not updated_player_info:
+                    try:
+                        updated_player_info = await interaction.guild.fetch_member(player.id)
+                    except discord.NotFound:
+                        logger.info(f"failed to fetch {player.id} when starting a lobby")
+                        continue
             return True
         else:
             # offer force start if there are not enough players
@@ -509,7 +520,8 @@ class LobbyController:
                         channel_to_participant_count[participant.voice_state.channel.id] += 1
                 
                 # if current players is low, make it so everyone has to leave to close the lobby
-                threshold = lobby.max_players * 0.75 if len(lobby.get_players()) > 3 else 1
+                num_curr_players = len(lobby.get_players())
+                threshold = num_curr_players * 0.75 if num_curr_players > 3 else 1
                 still_active = False
                 for num_participants in channel_to_participant_count.values():
                     if num_participants >= threshold:
