@@ -17,7 +17,7 @@ class Lobby:
         self.started_at = None
 
         self._state = LobbyState.WAITING
-        self._players: list[Player] = [Player(owner.id)]
+        self._players: list[Player] = [Player(owner.id, voice_state=owner.voice)]
         self._fillers: list[Player] = []
 
     # -----------------------------
@@ -90,36 +90,52 @@ class Lobby:
         self.time = new_time
 
     def add_player(self, player: discord.Member, forced: bool) -> LobbyAddResult:
-        """ Adds a player to the player list, removing them from the fillers if they were in the filler list. """
+        """Adds a player to the player list, moving them from fillers if necessary."""
         if self._state == LobbyState.COMPLETED:
             return LobbyAddResult.LOBBY_COMPLETED
 
         if self.playing_in_lobby(player.id):
             return LobbyAddResult.ALREADY_IN_LOBBY
-        elif len(self._players) < self.max_players:
-            # if they were in fillers, remove them
-            self._fillers = [f for f in self._fillers if f.id != player.id]
-            self._players.append(Player(player.id, forced))
+
+        if len(self._players) < self.max_players:
+            # look for an existing Player object in fillers
+            existing_player = next((f for f in self._fillers if f.id == player.id), None)
+            if existing_player:
+                self._fillers.remove(existing_player)
+                existing_player.forced = forced # update forced
+                existing_player.voice_state = player.voice  # keep voice state fresh
+                self._players.append(existing_player)
+            else:
+                # create new Player if they weren’t a filler
+                self._players.append(Player(player.id, forced, voice_state=player.voice))
+
             return LobbyAddResult.SUCCESS
         else:
             return LobbyAddResult.LOBBY_FULL
 
     def add_filler(self, player: discord.Member, forced: bool) -> LobbyAddResult:
-        """ Adds a player to the filler list. """
+        """Adds a player to the filler list, moving them from players if necessary."""
         if self._state == LobbyState.COMPLETED:
             return LobbyAddResult.LOBBY_COMPLETED
 
-        if player.id in [f.id for f in self._fillers]:
+        if any(f.id == player.id for f in self._fillers):
             return LobbyAddResult.ALREADY_IN_LOBBY
-        elif self.playing_in_lobby(player.id):
-            self._players = [p for p in self._players if p.id != player.id]
-            self._fillers.append(Player(player.id, forced))
-            return LobbyAddResult.SUCCESS
+
+        if self.playing_in_lobby(player.id):
+            # move from players -> fillers
+            existing_player = next((p for p in self._players if p.id == player.id), None)
+            if existing_player:
+                self._players.remove(existing_player)
+                existing_player.forced = forced
+                existing_player.voice_state = player.voice # keep voice state fresh
+                self._fillers.append(existing_player)
+                return LobbyAddResult.SUCCESS
         else:
-            self._fillers.append(Player(player.id, forced))
+            # brand new filler
+            self._fillers.append(Player(player.id, forced, player.voice))
             return LobbyAddResult.SUCCESS
 
-    def remove_player(self, player: discord.Member) -> LobbyRemoveResult:
+    def remove_participant(self, player: discord.Member) -> LobbyRemoveResult:
         """ Removes a player from the player or filler list. If the player leaving is the last player, the lobby will close. """
         if self._state == LobbyState.COMPLETED:
             return LobbyRemoveResult.LOBBY_COMPLETED
