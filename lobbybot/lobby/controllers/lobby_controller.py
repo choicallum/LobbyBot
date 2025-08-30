@@ -9,7 +9,9 @@ from lobbybot.lobby.views import (
     ActiveLobbyView,
     ForceStartView,
     LobbySelectView,
-    CloseConfirmationView
+    CloseConfirmationView,
+    make_lobby_ready_embed,
+    make_lobby_invite_embed
 )
 from lobbybot.timezones import get_time_zone, parse_time_input, ASAP_TIME
 from lobbybot.settings import BUMP_LOBBY_CHANNEL_ID
@@ -122,16 +124,25 @@ class LobbyController:
         
         if success:
             # notify players
-            message_parts = ["Your game is ready!\n"]
-            message_parts.extend([f"<@{player.id}>" for player in final_players])
+            message_parts = [f"<@{player.id}>" for player in final_players]
+
+            dm_embed = make_lobby_ready_embed(lobby, interaction.guild_id, interaction.channel_id)
+            for player in final_players:
+                try:
+                    user = interaction.client.get_user(player.id) or await interaction.client.fetch_user(player.id)
+                    await user.send(embed=dm_embed)
+                except Exception as e:
+                    logger.exception(f"Unexpected error while DMing user {player.id} -- {e}")
             
             # update lobby to active state
             timeout = 21600 # 6 hours until timeout for active lobby
             new_view = ActiveLobbyView(timeout=timeout, lobby=lobby, controller=self)
             self.lobby_to_view[lobby.id] = new_view
             
-            await interaction.channel.send(content=' '.join(message_parts))
+            channel_embed = make_lobby_ready_embed(lobby)
+            await interaction.channel.send(content=' '.join(message_parts), embed=channel_embed)
             await self._update_lobby_message(interaction, lobby, new_view)
+            # create new auto close task for the active lobby view
             asyncio.create_task(self._auto_close_lobby(lobby, timeout, LobbyState.ACTIVE))
 
             # update every player's voice state as the baseline now that the lobby is active
@@ -222,7 +233,7 @@ class LobbyController:
                            user: discord.Member, view: ActiveLobbyView):
         """Handle filling in to active lobby"""
         user_id = user.id
-        current_players = len(lobby.get_players())
+        current_players = len(lobby.get_players)
         strict_count = len(view.strict_ids)
         
         if user_id in view.strict_ids:
@@ -400,6 +411,7 @@ class LobbyController:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
 
     async def _handle_participant_dropout(self, interaction: discord.Interaction, lobby: Lobby, participant: discord.Member):
+        # Handle when a player or filler leaves.
         try:
             view = self.lobby_to_view[lobby.id]
         except Exception as e:
@@ -416,12 +428,21 @@ class LobbyController:
                     await self._update_lobby_message(interaction, lobby)
                     await self.lobby_to_msg[lobby.id].channel.send("There are no fillers! This lobby needs fillers! 🐀🐁")
                 else:
-                    # Invite first filler
-                    filler = lobby._fillers[0]
                     await self._update_lobby_message(interaction, lobby)
-                    await self.lobby_to_msg[lobby.id].channel.send(f"<@{filler.id}>, you are invited to join the lobby! Please click 'Fill In!' within 5 minutes. Press Drop Out to decline.")
-                    # view.strict_ids.append(filler.id)
-                    # asyncio.create_task(self._wait_for_filler_response(filler.id, view, lobby)
+                    # Invite all fillers
+                    mentions = " ".join(f"<@{filler.id}>" for filler in lobby.get_fillers)
+                    channel_embed = make_lobby_invite_embed(lobby)
+                    await self.lobby_to_msg[lobby.id].channel.send(
+                        content=mentions,
+                        embed=channel_embed
+                    )
+                    for player in lobby.get_fillers:
+                        dm_embed = make_lobby_invite_embed(lobby, interaction.guild_id, interaction.channel_id)
+                        try:
+                            user = interaction.client.get_user(player.id) or await interaction.client.fetch_user(player.id)
+                            await user.send(embed=dm_embed)
+                        except Exception as e:
+                            logger.exception(f"Unexpected error while DMing user {player.id} -- {e}")
         elif result == LobbyRemoveResult.SUCCESS_FILLER:
             await self._update_lobby_message(interaction, lobby)
         elif result == LobbyRemoveResult.LOBBY_EMPTY:
@@ -430,7 +451,6 @@ class LobbyController:
         elif result == LobbyRemoveResult.NOT_IN_LOBBY:
             await interaction.response.send_message("This player was not in the lobby! 😡", ephemeral=True)
             return
-            
 
     # async def _wait_for_filler_response(self, filler_id: int, view: ActiveLobbyView, lobby: Lobby):
     #     """Wait for filler to respond to invitation"""
@@ -513,7 +533,7 @@ class LobbyController:
                 lobby.participant_joined_voice(member.id)
             
             # if the lobby hasn't become 'voice active' yet (i.e. not everyone, at some point in time, has joined voice), then don't check
-            if not all(player.joined_voice for player in lobby.get_players()):
+            if not all(player.joined_voice for player in lobby.get_players):
                 continue
 
             if after.channel == None: # meaning no longer connected to a channel

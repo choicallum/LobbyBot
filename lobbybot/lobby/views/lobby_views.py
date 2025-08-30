@@ -66,13 +66,13 @@ class BaseLobbyView(discord.ui.View):
                 logger.warning(f"Failed to set lobby image: {e}")
 
         player_list = []
-        for player in self.lobby.get_players():
+        for player in self.lobby.get_players:
             note = " (force added)" if player.force_added else ""
             player_list.append(f"<@{player.id}>{note}")
 
         players_text = "\n".join(player_list) if player_list else "None"
         embed.add_field(
-            name=f"👥 Players ({len(self.lobby.get_players())}/{self.lobby.max_players})",
+            name=f"👥 Players ({len(self.lobby.get_players)}/{self.lobby.max_players})",
             value=players_text,
             inline=True
         )
