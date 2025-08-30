@@ -77,8 +77,13 @@ class Lobby:
     def get_participants(self):
         return self._players + self._fillers
 
+    @property
     def get_players(self):
         return self._players
+    
+    @property
+    def get_fillers(self):
+        return self._fillers
         
     def edit_time(self, new_time: int) -> None:
         """ Edits the time of the lobby. """
