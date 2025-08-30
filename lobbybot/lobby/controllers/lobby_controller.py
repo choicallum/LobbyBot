@@ -104,7 +104,7 @@ class LobbyController:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
             return
         
-        await self._handle_participant_dropout(interaction, lobby, user, )
+        await self._handle_participant_dropout(interaction, lobby, user)
     
     async def handle_start_lobby(self, interaction: discord.Interaction, lobby: Lobby, forced: bool) -> bool:
         """Handle starting a lobby"""
@@ -411,13 +411,7 @@ class LobbyController:
             await interaction.response.send_message("This lobby is already completed! 🙊", ephemeral=True)
 
     async def _handle_participant_dropout(self, interaction: discord.Interaction, lobby: Lobby, participant: discord.Member):
-        # Handle when a player or filler leaves.
-        try:
-            view = self.lobby_to_view[lobby.id]
-        except Exception as e:
-            logger.error(f"failed to find a view while removing a player: {e}")
-            interaction.response.send_message("Error occurred while removing a player.")
-            return
+        # Handle when a player or filler leaves from an active lobby.
         
         result = lobby.remove_participant(participant)
         if result == LobbyRemoveResult.SUCCESS_PLAYER:
@@ -425,10 +419,8 @@ class LobbyController:
             if lobby.state == LobbyState.ACTIVE:
                 # handle when a player drops out of an active lobby
                 if not lobby._fillers:
-                    await self._update_lobby_message(interaction, lobby)
                     await self.lobby_to_msg[lobby.id].channel.send("There are no fillers! This lobby needs fillers! 🐀🐁")
                 else:
-                    await self._update_lobby_message(interaction, lobby)
                     # Invite all fillers
                     mentions = " ".join(f"<@{filler.id}>" for filler in lobby.get_fillers)
                     channel_embed = make_lobby_invite_embed(lobby)
