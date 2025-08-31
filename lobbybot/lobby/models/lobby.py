@@ -5,6 +5,7 @@ import discord
 import time
 if TYPE_CHECKING:
     from discord import VoiceState
+from itertools import chain
 
 class Lobby:
     def __init__(self, id: int, owner: discord.Member, time: int, max_players: int, game: str, created_at: int):
@@ -58,22 +59,19 @@ class Lobby:
         return self.playing_in_lobby(user_id) or any(player.id == user_id for player in self._fillers)
 
     def edit_participant_voicestate(self, player_id: int, new_state: "VoiceState"):
+        """ 
+        Changes a participant's voicestate to new_state if they are in the lobby, and ignores it otherwise. 
+        Also, if the lobby is active, this method updates their joined voice status. 
+        """
         participant = next((p for p in self._players if p == player_id), None)
         if not participant:
-            participant = next((p for p in self._filler if p == player_id), None)
+            participant = next((p for p in self._fillers if p == player_id), None)
 
         if participant:
-            participant.voice_state = new_state
-    
-    def participant_joined_voice(self, player_id: int):
-        participant = next((p for p in self._players if p == player_id), None)
-        if not participant:
-            participant = next((p for p in self._filler if p == player_id), None)
+            participant.update_voice_state(new_state)
+            if self.is_active():
+                participant.update_joined_voice()
 
-        if participant:
-            participant.joined_voice = True
-
-    
     def get_participants(self):
         return self._players + self._fillers
 
@@ -174,7 +172,6 @@ class Lobby:
 
         if len(final_players) == self.max_players or force:
             self.transition(LobbyState.ACTIVE)
-
             # promote fillers if needed
             needed = len(final_players) - len(self._players)
             if needed > 0:
