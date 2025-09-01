@@ -109,6 +109,16 @@ def run():
             return
         log_cmd_start(interaction, "flexnow")
         await lobby_controller.create_lobby(interaction, "now", lobby_size, "flex")
+    
+    @bot.tree.command(name="deadlocknow", description="Starts a new deadlock lobby")
+    async def deadlocknow(interaction: discord.Interaction, lobby_size: int = 5):
+        """
+        :param lobby_size: Max number of players in the lobby.
+        """
+        if not await bot_can_send(interaction):
+            return
+        log_cmd_start(interaction, "deadlocknow")
+        await lobby_controller.create_lobby(interaction, "now", lobby_size, "deadlock")
 
     @bot.tree.command(name="close", description="Closes an existing lobby")
     async def close(interaction: discord.Interaction):

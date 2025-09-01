@@ -525,7 +525,6 @@ class LobbyController:
             if not lobby.is_active():
                 continue
 
-            print(lobby.get_players[0].id, lobby.get_players[0].voice_state.channel, lobby.get_players[0].joined_voice)
             # if the lobby hasn't become 'voice active' yet (i.e. not everyone, at some point in time, has joined voice), then don't check
             if not all(player.joined_voice for player in lobby.get_players):
                 continue
@@ -535,8 +534,9 @@ class LobbyController:
                 
                 participants = lobby.get_participants()
                 for participant in participants:
+                    # this can happen if person A leaves first and then person B causes this check again
                     if not participant.voice_state:
-                        logger.error("Expected a voice_state but didn't find one for a player.")
+                        continue
                     if participant.voice_state.channel:
                         channel_to_participant_count[participant.voice_state.channel.id] += 1
                 
