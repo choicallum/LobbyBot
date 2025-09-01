@@ -42,7 +42,8 @@ class BaseLobbyView(discord.ui.View):
 
         game_aliases = {
             "<:valorant:1409833022978785351>": ["val", "valorant", "shoot", "gun"],
-            "<:leagueoflegends:1409852497316806746>": ["league", "league of legends", "lol", "flex", "flex now"]
+            "<:leagueoflegends:1409852497316806746>": ["league", "league of legends", "lol", "flex", "flex now"],
+            "<:deadlock:1411925174671904899>": ["deadlock"]
         }
         # flatten aliases into a single dict mapping alias -> emoji
         alias_to_emoji = {alias.lower(): emoji for emoji, aliases in game_aliases.items() for alias in aliases}
