@@ -111,7 +111,7 @@ def run():
         await lobby_controller.create_lobby(interaction, "now", lobby_size, "flex")
     
     @bot.tree.command(name="deadlocknow", description="Starts a new deadlock lobby")
-    async def deadlocknow(interaction: discord.Interaction, lobby_size: int = 5):
+    async def deadlocknow(interaction: discord.Interaction, lobby_size: int = 6):
         """
         :param lobby_size: Max number of players in the lobby.
         """
