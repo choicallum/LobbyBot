@@ -5,9 +5,10 @@ from lobbybot.images.image_store import get_img_store
 from lobbybot.timezones import ASAP_TIME
 from typing import List, Optional
 
-def make_lobby_ready_embed(lobby: Lobby, guild: Optional[str] = None, channel: Optional[str] = None) -> discord.Embed:
+def make_lobby_notif_embed(lobby: Lobby, msg: str, guild: Optional[str] = None, channel: Optional[str] = None) -> discord.Embed:
+    """ Creates an embed to notify players that the lobby is read. Msg parameter describes what to say in the embed after (name)'s (game) lobby"""
     embed = discord.Embed(
-        description=f"{lobby.owner.name}'s {lobby.game} lobby is starting now!",
+        description=f"{lobby.owner.name}'s {lobby.game} lobby{msg}",
         color=discord.Color.green()
     )
     if guild and channel:

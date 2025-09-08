@@ -1,5 +1,5 @@
 from .player import Player
-from .lobby_enums import LobbyAddResult, LobbyRemoveResult, LobbyState, TRANSITIONS
+from .lobby_enums import LobbyAddResult, LobbyRemoveResult, LobbyState, TRANSITIONS, ReadyResult
 from typing import Tuple, List, TYPE_CHECKING
 import discord
 import time
@@ -18,8 +18,8 @@ class Lobby:
         self.started_at = None
 
         self._state = LobbyState.WAITING
-        self._players: list[Player] = [Player(owner.id, voice_state=owner.voice)]
-        self._fillers: list[Player] = []
+        self._players: List[Player] = [Player(owner.id, voice_state=owner.voice)]
+        self._fillers: List[Player] = []
 
     # -----------------------------
     # State
@@ -50,13 +50,74 @@ class Lobby:
         """ Returns if the lobby is full (i.e. has max_players in the player list). """
         return len(self._players) >= self.max_players
 
-    def playing_in_lobby(self, user_id: int) -> bool:
+    def is_player(self, user_id: int) -> bool:
         """ Returns if a user_id is in the player list of the lobby. """
         return any(player.id == user_id for player in self._players)
+    
+    def is_filler(self, user_id: int) -> bool:
+        """ Returns if a user_id is in the filler list of the lobby. """
+        return any(player.id == user_id for player in self._fillers)
 
     def in_lobby(self, user_id: int) -> bool:
         """ Returns if a user_id is in the lobby at all. """
-        return self.playing_in_lobby(user_id) or any(player.id == user_id for player in self._fillers)
+        return self.is_player(user_id) or any(player.id == user_id for player in self._fillers)
+
+    def ready_up(self, user: discord.Member) -> ReadyResult:
+        """ Readies up user_id. If the player is not in the lobby, add them as a filler. """
+        player = next((p for p in self._players if p == user.id), None)
+        filler = None
+        if not player:
+            filler = next((p for p in self._fillers if p == user.id), None)
+        
+        # add a player  
+        if not player and not filler:
+            new_player = Player(user.id, False, user.voice)
+            self._fillers.append(new_player)
+            filler = new_player
+        
+        if (player and player.is_ready()) or (filler and filler.is_ready()):
+            return ReadyResult.ALREADY_READY
+    
+        if player:
+            player.ready_up()
+            return ReadyResult.SUCCESS_PLAYER
+        elif filler:
+            filler.ready_up()
+            return ReadyResult.SUCCESS_FILLER
+        
+    def unready(self, user: discord.Member) -> ReadyResult:
+        """ Unreadies user_id. """
+        player = next((p for p in self._players if p == user.id), None)
+        filler = None
+        if not player:
+            filler = next((p for p in self._fillers if p == user.id), None)
+        if (player and player.is_not_ready()) or (filler and filler.is_not_ready()):
+            return ReadyResult.ALREADY_READY
+        if player:
+            player.unready()
+            return ReadyResult.SUCCESS_PLAYER
+        elif filler:
+            filler.unready()
+            return ReadyResult.SUCCESS_FILLER
+        else:
+            return ReadyResult.NOT_IN_LOBBY
+
+    def all_ready(self, treat_pending_as_declined: bool = False) -> bool:
+        """ get the number of fillers we are allowed to fill in based on how many players have rejected
+        pending_players_are_not_ready tells the function to count pending players as not_ready or not"""
+        players_ready = sum([1 for player in self._players if player.is_ready()])
+
+        if treat_pending_as_declined:
+            players_declined = sum([1 for player in self._players if player.is_not_ready() or player.is_pending_ready()])
+        else:
+            players_declined = sum([1 for player in self._players if player.is_not_ready()])
+
+        if players_declined == 0:
+            return players_ready == len(self._players)
+        
+        fillers_ready = sum([1 for filler in self._fillers if filler.is_ready()])
+        # otherwise, if we have declined players, we need all other players ready and enough fillers to fill the declined players
+        return players_ready == (len(self._players) - players_declined) and fillers_ready >= players_declined
 
     def edit_participant_voicestate(self, player_id: int, new_state: "VoiceState"):
         """ 
@@ -91,8 +152,11 @@ class Lobby:
         """Adds a player to the player list, moving them from fillers if necessary."""
         if self._state == LobbyState.COMPLETED:
             return LobbyAddResult.LOBBY_COMPLETED
+    
+        if self._state == LobbyState.READY_CHECK:
+            return LobbyAddResult.LOBBY_IN_READY_CHECK
 
-        if self.playing_in_lobby(player.id):
+        if self.is_player(player.id):
             return LobbyAddResult.ALREADY_IN_LOBBY
 
         if len(self._players) < self.max_players:
@@ -100,7 +164,7 @@ class Lobby:
             existing_player = next((f for f in self._fillers if f.id == player.id), None)
             if existing_player:
                 self._fillers.remove(existing_player)
-                existing_player.forced = forced # update forced
+                existing_player.force_added = forced # update forced
                 existing_player.voice_state = player.voice  # keep voice state fresh
                 self._players.append(existing_player)
             else:
@@ -115,16 +179,19 @@ class Lobby:
         """Adds a player to the filler list, moving them from players if necessary."""
         if self._state == LobbyState.COMPLETED:
             return LobbyAddResult.LOBBY_COMPLETED
+        
+        if self._state == LobbyState.READY_CHECK:
+            return LobbyAddResult.LOBBY_IN_READY_CHECK
 
         if any(f.id == player.id for f in self._fillers):
             return LobbyAddResult.ALREADY_IN_LOBBY
 
-        if self.playing_in_lobby(player.id):
+        if self.is_player(player.id):
             # move from players -> fillers
             existing_player = next((p for p in self._players if p.id == player.id), None)
             if existing_player:
                 self._players.remove(existing_player)
-                existing_player.forced = forced
+                existing_player.force_added = forced
                 existing_player.voice_state = player.voice # keep voice state fresh
                 self._fillers.append(existing_player)
                 return LobbyAddResult.SUCCESS
@@ -137,9 +204,12 @@ class Lobby:
         """ Removes a player from the player or filler list. If the player leaving is the last player, the lobby will close. """
         if self._state == LobbyState.COMPLETED:
             return LobbyRemoveResult.LOBBY_COMPLETED
+        
+        if self._state == LobbyState.READY_CHECK:
+            return LobbyRemoveResult.LOBBY_IN_READY_CHECK
 
         lobby_result = None
-        if self.playing_in_lobby(player.id):
+        if self.is_player(player.id):
             self._players = [p for p in self._players if p.id != player.id]
             lobby_result = LobbyRemoveResult.SUCCESS_PLAYER
         elif any(f.id == player.id for f in self._fillers):
@@ -163,6 +233,25 @@ class Lobby:
     # -----------------------------
     # Lifecycle
     # -----------------------------
+    def start_ready_check(self):
+        """ Starts ready check for this lobby. """
+        self._state = LobbyState.READY_CHECK
+
+    def end_ready_check(self):
+        """ Ends ready check for this lobby. """
+        if self._state == LobbyState.READY_CHECK:
+            self.transition(LobbyState.WAITING)
+
+        # any declined players should be removed from the lobby
+        self._players = [player for player in self._players if not player.is_not_ready()]
+
+        # any declined fillers should be removed from the lobby
+        self._fillers = [filler for filler in self._fillers if not filler.is_not_ready()]
+
+        if not self._players and not self._fillers:
+            return LobbyRemoveResult.LOBBY_EMPTY
+        return None
+
     def start(self, force: bool) -> Tuple[bool, List[Player]]:
         """ Attempts to start the lobby, returns success and final player list. If force is True, will always start the lobby. """
         if self._state not in (LobbyState.WAITING, LobbyState.PENDING):
@@ -185,6 +274,32 @@ class Lobby:
         # not enough players, and not forced
         self.transition(LobbyState.PENDING)
         return False, final_players
+
+    def start_from_ready_check(self): 
+        if self._state != LobbyState.READY_CHECK:
+            return
+
+        # start with ready players
+        final_players = [p for p in self._players if p.is_ready()]
+
+        # promote ready fillers if we still need players
+        needed_players = self.max_players - len(final_players)
+        ready_fillers = [f for f in self._fillers if f.is_ready()]
+        to_promote = ready_fillers[:needed_players]
+        for filler in to_promote:
+            self._fillers.remove(filler)
+            final_players.append(filler)
+
+        # move unready players to fillers. Remove not_ready players from the player list altogether.
+        pending_players = [p for p in self._players if p.is_pending_ready()]
+        for player in pending_players:
+            self._players.remove(player)
+            self._fillers.append(player)
+
+        self._players = final_players
+
+        self.transition(LobbyState.ACTIVE)
+        self.started_at = int(time.time())
 
     def end(self) -> None:
         """Ends the lobby."""

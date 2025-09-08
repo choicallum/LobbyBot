@@ -11,6 +11,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+game_aliases = {
+    "<:valorant:1409833022978785351>": ["val", "valorant", "shoot", "gun"],
+    "<:leagueoflegends:1409852497316806746>": ["league", "league of legends", "lol", "flex", "flex now"],
+    "<:deadlock:1411925174671904899>": ["deadlock"]
+}
+# flatten aliases into a single dict mapping alias -> emoji
+alias_to_emoji = {alias.lower(): emoji for emoji, aliases in game_aliases.items() for alias in aliases}
+
 class BaseLobbyView(discord.ui.View):
     def __init__(self, timeout: int, lobby: Lobby, controller: "LobbyController"):
         super().__init__(timeout=timeout)
@@ -40,13 +48,6 @@ class BaseLobbyView(discord.ui.View):
         else:
             color = discord.Color.dark_gray()
 
-        game_aliases = {
-            "<:valorant:1409833022978785351>": ["val", "valorant", "shoot", "gun"],
-            "<:leagueoflegends:1409852497316806746>": ["league", "league of legends", "lol", "flex", "flex now"],
-            "<:deadlock:1411925174671904899>": ["deadlock"]
-        }
-        # flatten aliases into a single dict mapping alias -> emoji
-        alias_to_emoji = {alias.lower(): emoji for emoji, aliases in game_aliases.items() for alias in aliases}
         game_emoji = alias_to_emoji.get(self.lobby.game.lower(), "🎮")
             
         embed = discord.Embed(
@@ -100,7 +101,12 @@ class WaitingLobbyView(BaseLobbyView):
         self.log_button(interaction, "leave_waiting")
         await self.controller.handle_leave_lobby(interaction, self.lobby, interaction.user)
     
-    @discord.ui.button(label="Start Lobby", style=discord.ButtonStyle.green, row=1)
+    @discord.ui.button(label="Start Ready Check", style=discord.ButtonStyle.green, row=1)
+    async def ready_check_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.log_button(interaction, "ready_check")
+        await self.controller.handle_start_ready_check(interaction, self.lobby)
+
+    @discord.ui.button(label="Force Start", style=discord.ButtonStyle.gray, row=1)
     async def start_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.log_button(interaction, "start")
         await self.controller.handle_start_lobby(interaction, self.lobby, forced=False)

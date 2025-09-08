@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, Optional
+from .lobby_enums import ReadyState
 if TYPE_CHECKING:
     from discord import VoiceState
 
@@ -10,10 +11,22 @@ class Player:
 
         self.voice_state: Optional["VoiceState"] = voice_state
         self.joined_voice: bool = False
-        self.ready = False
+        self.ready = ReadyState
     
     def ready_up(self):
-        self.ready = True
+        self.ready = ReadyState.READY
+
+    def unready(self):
+        self.ready = ReadyState.NOT_READY
+    
+    def is_ready(self) -> bool:
+        return self.ready == ReadyState.READY
+    
+    def is_pending_ready(self) -> bool:
+        return self.ready == ReadyState.PENDING
+
+    def is_not_ready(self) -> bool:
+        return self.ready == ReadyState.NOT_READY
     
     def update_voice_state(self, new_state: Optional["VoiceState"]):
         self.voice_state = new_state
