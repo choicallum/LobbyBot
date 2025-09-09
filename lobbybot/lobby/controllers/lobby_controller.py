@@ -503,7 +503,7 @@ class LobbyController:
                 logger.error(f"No previous emssage foudn for lobby {lobby.id} and no interaction provided")
                 return
             sent = await channel.send(embed=embed, view=current_view)
-            fetched = sent
+            fetched = await sent.channel.fetch_message(sent.id)
         self.lobby_to_msg[lobby.id] = fetched
     
     async def _handle_add_result(self, interaction: discord.Interaction, result: LobbyAddResult, is_filler: bool = False):
