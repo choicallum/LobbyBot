@@ -20,6 +20,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+READY_CHECK_DURATION = 300 # 5 minutes
+ 
 class LobbyController:
     """Main controller for handling lobby operations"""
     
@@ -121,13 +123,20 @@ class LobbyController:
             return False
 
         lobby.start_ready_check()
-        ready_check_view = ReadyCheckLobbyView(300, lobby, self, int((datetime.now(timezone.utc)).timestamp()) + 300)
+        # ping all players
+        msg = ""
+        for player in lobby.get_players:
+            msg += f"<@{player.id}>"
+        await interaction.channel.send(msg)
+        # create new view
+        ready_check_view = ReadyCheckLobbyView(READY_CHECK_DURATION, lobby, self, int((datetime.now(timezone.utc)).timestamp()) + READY_CHECK_DURATION)
         self.lobby_to_view[lobby.id] = ready_check_view
         await self._update_lobby_message(lobby=lobby, view=ready_check_view, interaction=interaction)
 
-        asyncio.create_task(self._ready_check_timeout(lobby, 300))
+        asyncio.create_task(self._ready_check_timeout(lobby, READY_CHECK_DURATION))
 
-        end_time = int((datetime.now(timezone.utc)).timestamp()) + 300
+        end_time = int((datetime.now(timezone.utc)).timestamp()) + READY_CHECK_DURATION
+        
         for player in lobby.get_players:
             dm_embed = make_lobby_notif_embed(lobby, f"'s ready check has started!\nThe deadline to respond is <t:{end_time}:R>", interaction.guild_id, interaction.channel_id)
         

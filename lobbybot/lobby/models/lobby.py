@@ -248,6 +248,9 @@ class Lobby:
         # any declined fillers should be removed from the lobby
         self._fillers = [filler for filler in self._fillers if not filler.is_not_ready()]
 
+        for participant in self.get_participants():
+            participant.unready()
+        
         if not self._players and not self._fillers:
             return LobbyRemoveResult.LOBBY_EMPTY
         return None
