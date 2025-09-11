@@ -235,6 +235,8 @@ class Lobby:
     # -----------------------------
     def start_ready_check(self):
         """ Starts ready check for this lobby. """
+        self._players = self._get_final_players()
+
         self._state = LobbyState.READY_CHECK
 
     def end_ready_check(self):
