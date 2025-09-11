@@ -16,6 +16,9 @@ class Player:
     def ready_up(self):
         self.ready = ReadyState.READY
 
+    def reset(self):
+        self.ready = ReadyState.PENDING
+
     def unready(self):
         self.ready = ReadyState.NOT_READY
     
