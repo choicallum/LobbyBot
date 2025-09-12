@@ -51,17 +51,24 @@ def run():
         if message.author.bot:
             return
         
-        # reprint twitter links
-        message_content = message.content
-        
         pattern = re.compile(r'https?://(twitter\.com|x\.com)/(.+)/status/(\d+)', re.IGNORECASE)
 
-        # Replace 'twitter.com' or 'x.com' with 'fxtwitter.com'
-        message_content = re.sub(pattern, r'https://fxtwitter.com/\2/status/\3', message_content)
-
         if pattern.search(message.content):
-            await message.channel.send(f"{message.author.display_name}: {message_content}", reference=message.reference)
+            fixed_content = re.sub(pattern, r'https://fxtwitter.com/\2/status/\3', message.content)
+
+            # Header embed
+            embed = discord.Embed(color=discord.Color.blue())
+            embed.set_author(
+                name=message.author.display_name,
+                icon_url=message.author.display_avatar.url
+            )
+
             await message.delete()
+            
+            # Send the header first
+            await message.channel.send(embed=embed, reference=message.reference)
+            # Then send the link alone, so it embeds normally
+            await message.channel.send(fixed_content)
 
     @bot.event
     async def on_voice_state_update(member, before, after):
