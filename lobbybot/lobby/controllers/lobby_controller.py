@@ -156,7 +156,10 @@ class LobbyController:
         if lobby.all_ready(True):
             lobby.start_from_ready_check()
             logger.info(f"Starting {lobby.id} due to successful ready check timeout.")
-            await self.lobby_to_msg[lobby.id].channel.send("Ready Check timing out...\nAny pending or declined players are being replaced with ready fillers.", delete_after=ONE_HOUR)
+            await self.lobby_to_msg[lobby.id].channel.send(
+                "Ready Check timing out...\nAny pending or declined players are being replaced with ready fillers.", 
+                delete_after=ONE_HOUR
+                )
             await self._handle_after_starting_lobby(lobby)
         else:
             logger.info(f"Returning {lobby.id} to waiting due to unsuccessful ready check timeout.")
@@ -176,7 +179,7 @@ class LobbyController:
                 await self._handle_after_starting_lobby(lobby, interaction)
             else:
                 await self._update_lobby_message(lobby=lobby, interaction=interaction)
-                await interaction.channel.send("You've successfully readied up!", ephemeral=True, delete_after=FIVE_MINS)
+                await interaction.followup.send("You've successfully readied up!", ephemeral=True)
 
     async def _end_ready_check(self, interaction: discord.Interaction, lobby: Lobby):
         res = lobby.end_ready_check()
