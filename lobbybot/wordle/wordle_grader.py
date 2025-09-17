@@ -14,6 +14,7 @@ emoji_map = {
 }
 
 logger = logging.getLogger(__name__)
+REMAINING_WORDS_THRESHOLD = 5
 # Contains all the known hints
 # green: int -> char (spot -> char)
 # yellow: char -> ints (where it cannot be)
@@ -56,6 +57,13 @@ class Hints:
 
     def __repr__(self):
         return f"Hints(green={self.green}, yellow={dict(self.yellow)}, gray={self.gray}, max_instances={self.max_instances})"
+
+class EvaluationResult:
+    def __init__(self, score: float, optimal_words: List[str], num_remaining: int, words_remaining: List[str]):
+        self.score = score
+        self.optimal_words = optimal_words
+        self.num_remaining = num_remaining
+        self.words_remaining = words_remaining
 
 # returns 5 char string that would be given by Wordle if guess = guess when target = target
 # G = green, Y = yellow, B = black/gray
@@ -175,10 +183,16 @@ class WordleSolver:
         self.valid_guesses = [word for word in self.valid_guesses if self.is_valid(word, self.hints)]
         self.valid_answers = [word for word in self.valid_answers if self.is_valid(word, self.hints)]
     
-    def evaluate_guesses(self) -> List[Tuple[float, str]]:
+    # returns a list of (score, optimal_words, how many words were remaining before the guess)
+    def evaluate_guesses(self) -> List[EvaluationResult]:
         scores = []
         # use same opener
         self.make_guess(self.guesses[0])
+        # return the number of guesses after the opener
+        if len(self.valid_guesses) <= REMAINING_WORDS_THRESHOLD:
+            scores.append(EvaluationResult(None, None, len(self.valid_guesses), self.valid_guesses))
+        else:  
+            scores.append(EvaluationResult(None, None, len(self.valid_guesses), []))
 
         for guess in self.guesses[1:]:
             # how good was the guess you actually made?
@@ -194,10 +208,14 @@ class WordleSolver:
                 optimal_words = []
 
             pct = (optimal_score / actual_score * 100) if actual_score else -1.0
-            scores.append((pct, optimal_words))
 
             # advance game state with the actual guess
             self.make_guess(guess)
+
+            if len(self.valid_guesses) <= REMAINING_WORDS_THRESHOLD:
+                scores.append(EvaluationResult(pct, optimal_words, len(self.valid_guesses), self.valid_guesses))
+            else:  
+                scores.append(EvaluationResult(pct, optimal_words, len(self.valid_guesses), []))
 
         return scores
 
@@ -239,9 +257,10 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
 
     await interaction.response.defer()
 
-    scores = solver.evaluate_guesses()
+    all_scores = solver.evaluate_guesses()
+    scores = all_scores[1:]  # skip the first one, it's just the number of words after the opener
 
-    total_score = sum(score[0] for score in scores)/len(scores) if scores else 100
+    total_score = sum(score.score for score in scores)/len(scores) if scores else 100
     embed = discord.Embed(title=f"Overall Score: {total_score:.2f}%", color=discord.Color.green())
     embed.set_author(
         name=f"{interaction.user.name}'s Wordle Analysis",
@@ -250,20 +269,38 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
     embed.add_field(
         name=f"Starter",
         value=f"{feedback_to_emojis(simulate_feedback(guesses_arr[0], real_answer))} ||{guesses_arr[0]}||",
-        inline=False
+        inline=True
     )
+    num_remaining = all_scores[0].num_remaining if scores else -1
+    remaining_words = "\n" + f"||{', '.join(all_scores[0].words_remaining)}||" if num_remaining <= REMAINING_WORDS_THRESHOLD else ""
+    embed.add_field(
+        name="Valid Answers Left",
+        value=f"{len(solver.possible_guesses)} ➡ {num_remaining}{remaining_words}",
+        inline=True
+    )
+    embed.add_field(name="\u200b", value="\u200b", inline=True)
 
-    for i, (percentage, optimal_words) in enumerate(scores, start=1):
+    for i, score in enumerate(scores, start=1):
         guess_word = guesses_arr[i]
         guess_spoiler = f"||{guess_word}||"
-        optimal_list = ', '.join(optimal_words)
+        optimal_list = ', '.join(score.optimal_words)
         optimal_spoiler = f"||{optimal_list}||"
+
         embed.add_field(
             name=f"Guess {i}",
-            value=f"{feedback_to_emojis(simulate_feedback(guess_word, real_answer))} {guess_spoiler}\n" 
-                  f"{percentage:.2f}% as good as the optimal guess(es) {optimal_spoiler}",
-            inline=False
+            value=f"{feedback_to_emojis(simulate_feedback(guess_word, real_answer))} {guess_spoiler}\n"
+                f"{score.score:.2f}% as good as the optimal guess(es) {optimal_spoiler}",
+            inline=True
         )
+
+        remaining_words = "\n" + f"||{', '.join(score.words_remaining)}||" if score.num_remaining <= REMAINING_WORDS_THRESHOLD else ""
+        embed.add_field(
+            name="Valid Answers Left",
+            value=f"{score.num_remaining}{remaining_words}",
+            inline=True
+        )
+        # invis spacer column -- discord likes to put embed fields in groups of 3.
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
 
     embed.add_field(
         name="Answer",

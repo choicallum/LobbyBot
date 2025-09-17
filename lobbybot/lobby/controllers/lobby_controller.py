@@ -164,7 +164,9 @@ class LobbyController:
         else:
             logger.info(f"Returning {lobby.id} to waiting due to unsuccessful ready check timeout.")
             await self._end_ready_check(None, lobby)
-            await self.lobby_to_msg[lobby.id].channel.send("Ready Check timing out...\nNot enough players were ready! Lobby is returning to waiting for more players.", delete_after=ONE_HOUR)
+            await self.lobby_to_msg[lobby.id].channel.send(
+                "Ready Check timing out...\nNot enough players were ready! Lobby is returning to waiting for more players.", 
+                delete_after=ONE_HOUR)
 
     async def handle_ready(self, interaction: discord.Interaction, lobby: Lobby):
         res = lobby.ready_up(interaction.user)
@@ -184,7 +186,9 @@ class LobbyController:
     async def _end_ready_check(self, interaction: discord.Interaction, lobby: Lobby):
         res = lobby.end_ready_check()
         if res == LobbyRemoveResult.LOBBY_EMPTY:
-            await interaction.channel.send(f"{lobby.owner.name}'s lobby is closing as there are no players or fillers ready to play.", delete_after=ONE_HOUR)
+            await interaction.channel.send(
+                f"{lobby.owner.name}'s lobby is closing as there are no players or fillers ready to play.", 
+                delete_after=ONE_HOUR)
             await self._close_lobby_internal(lobby.owner.id, interaction)
             return
         
@@ -213,7 +217,9 @@ class LobbyController:
                 await self._end_ready_check(interaction, lobby)
                 # if there are still players (i.e. we didn't just close the lobby)
                 if lobby.get_players:
-                    await interaction.channel.send(f"Not enough players were ready after {interaction.user} said they were not ready.\nLobby is returning to waiting state.", delete_after=ONE_HOUR)
+                    await interaction.channel.send(
+                        f"Not enough players were ready after {interaction.user} said they were not ready.\nLobby is returning to waiting state.", 
+                        delete_after=ONE_HOUR)
             elif lobby.all_ready():
                 lobby.start_from_ready_check()
                 await self._handle_after_starting_lobby(lobby, interaction)
