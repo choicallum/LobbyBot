@@ -59,7 +59,8 @@ class Hints:
         return f"Hints(green={self.green}, yellow={dict(self.yellow)}, gray={self.gray}, max_instances={self.max_instances})"
 
 class EvaluationResult:
-    def __init__(self, score: float, optimal_words: List[str], num_remaining: int, words_remaining: List[str]):
+    def __init__(self, guess: str, score: float, optimal_words: List[str], num_remaining: int, words_remaining: List[str]):
+        self.guess = guess
         self.score = score
         self.optimal_words = optimal_words
         self.num_remaining = num_remaining
@@ -189,10 +190,8 @@ class WordleSolver:
         # use same opener
         self.make_guess(self.guesses[0])
         # return the number of guesses after the opener
-        if len(self.valid_guesses) <= REMAINING_WORDS_THRESHOLD:
-            scores.append(EvaluationResult(None, None, len(self.valid_guesses), self.valid_guesses))
-        else:  
-            scores.append(EvaluationResult(None, None, len(self.valid_guesses), []))
+        valid_guesses = self.valid_guesses if len(self.valid_guesses) <= REMAINING_WORDS_THRESHOLD else []
+        scores.append(EvaluationResult(self.guesses[0], None, None, len(self.valid_guesses), valid_guesses))
 
         for guess in self.guesses[1:]:
             # how good was the guess you actually made?
@@ -212,15 +211,37 @@ class WordleSolver:
             # advance game state with the actual guess
             self.make_guess(guess)
 
-            if len(self.valid_guesses) <= REMAINING_WORDS_THRESHOLD:
-                scores.append(EvaluationResult(pct, optimal_words, len(self.valid_guesses), self.valid_guesses))
-            else:  
-                scores.append(EvaluationResult(pct, optimal_words, len(self.valid_guesses), []))
+            valid_guesses = self.valid_guesses if len(self.valid_guesses) <= REMAINING_WORDS_THRESHOLD else []
+            scores.append(EvaluationResult(guess, pct, optimal_words, len(self.valid_guesses), valid_guesses))
 
         return scores
 
 import discord
 
+def suspicious_scores(scores: List[EvaluationResult]) -> bool:
+    """ 
+    Returns if the scores look wrong because try_all_words is off. 
+    a) If scores are >100%
+    b) if the guess is not in the best_words list but got 100%
+    c) if the guess is not in the first valid answers list we see
+    """
+
+    words_remaining = []
+    for score in scores:
+        if score.score is None:
+            continue
+
+        if ((score.score > 100) or \
+            (score.score == 100 and score.guess not in score.optimal_words)
+            or (words_remaining and score.guess not in words_remaining)):
+
+            return True
+
+        # once we have a list of remaining words, every guess from AFTER that guess should be in that list.
+        if not words_remaining and score.words_remaining:
+            words_remaining = score.words_remaining
+    return False
+        
 async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: str, try_all_words: bool):
     guesses_arr = [guess.strip().lower() for guess in guesses.split(',')]
     answer = answer.strip().lower()
@@ -281,7 +302,7 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
     embed.add_field(name="\u200b", value="\u200b", inline=True)
 
     for i, score in enumerate(scores, start=1):
-        guess_word = guesses_arr[i]
+        guess_word = score.guess
         guess_spoiler = f"||{guess_word}||"
         optimal_list = ', '.join(score.optimal_words)
         optimal_spoiler = f"||{optimal_list}||"
@@ -308,6 +329,13 @@ async def grade_wordle(interaction: discord.Interaction, guesses: str, answer: s
         inline=False
     )
     
-    embed.set_footer(text="Try try_all_words=True to see more obscure guesses!")
+    footer = (
+        "Trying all possible guesses!" if try_all_words else
+        "Try try_all_words=True to see more obscure guesses!" if not suspicious_scores(scores) else
+        "Strange evaluation has been detected. "
+        "Only words on Wordle's leaked, slightly outdated possible answer list of common 5-letter words are being tried. "
+        "If you want a more accurate evaluation, try rerunning the command with try_all_words=True."
+    )
 
+    embed.set_footer(text=footer)
     await interaction.followup.send(embed=embed)
