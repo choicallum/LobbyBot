@@ -30,6 +30,7 @@ class LobbyController:
         self.lobby_manager = LobbyManager() 
         self.lobby_to_view: dict[int, discord.ui.View] = {} # lobby id -> view
         self.lobby_to_msg: dict[int, discord.Message] = {} # lobby id -> message NOTE: you must fetch the message from an interaction response so the webhook doesn't expire
+        self.lobby_to_timeout: dict[int, asyncio.Task] = {} # lobby id -> timeout task
         self.spam_tasks = {}
     
     async def create_lobby(self, interaction: discord.Interaction, time: str, 
@@ -124,6 +125,10 @@ class LobbyController:
             return False
 
         lobby.start_ready_check()
+
+        if lobby.id in self.lobby_to_timeout and not self.lobby_to_timeout[lobby.id].done():
+            self.lobby_to_timeout[lobby.id].cancel()
+            del self.lobby_to_timeout[lobby.id]
         # ping all players
         msg = ""
         for player in lobby.get_players:
@@ -134,7 +139,8 @@ class LobbyController:
         self.lobby_to_view[lobby.id] = ready_check_view
         await self._update_lobby_message(lobby=lobby, view=ready_check_view, interaction=interaction)
 
-        asyncio.create_task(self._ready_check_timeout(lobby, READY_CHECK_DURATION))
+        
+        self.lobby_to_timeout[lobby.id] = asyncio.create_task(self._ready_check_timeout(lobby, READY_CHECK_DURATION))
 
         end_time = int((datetime.now(timezone.utc)).timestamp()) + READY_CHECK_DURATION
         
@@ -148,7 +154,11 @@ class LobbyController:
                     logger.exception(f"Unexpected error while DMing user {player.id} -- {e}")
     
     async def _ready_check_timeout(self, lobby: Lobby, timeout: int):
-        await asyncio.sleep(timeout)
+        try:
+            await asyncio.sleep(timeout)
+        except asyncio.CancelledError:
+            logger.info(f"Timeout task for lobby {lobby.id} was cancelled.")
+            return
         
         if lobby.state != LobbyState.READY_CHECK or lobby.is_completed():
             return
@@ -185,6 +195,7 @@ class LobbyController:
 
     async def _end_ready_check(self, interaction: discord.Interaction, lobby: Lobby):
         res = lobby.end_ready_check()
+        
         if res == LobbyRemoveResult.LOBBY_EMPTY:
             await interaction.channel.send(
                 f"{lobby.owner.name}'s lobby is closing as there are no players or fillers ready to play.", 
