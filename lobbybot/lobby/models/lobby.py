@@ -235,9 +235,16 @@ class Lobby:
     # -----------------------------
     def start_ready_check(self):
         """ Starts ready check for this lobby. """
-        self._players = self._get_final_players()
+        final_players = self._get_final_players()
 
-        self._state = LobbyState.READY_CHECK
+        needed = len(final_players) - len(self._players)
+        if needed > 0:
+            fillers_used = self._fillers[:needed]
+            self._players.extend(fillers_used)
+            del self._fillers[:needed]
+
+
+        self.transition(LobbyState.READY_CHECK)
 
     def end_ready_check(self):
         """ Ends ready check for this lobby. """
